@@ -521,6 +521,8 @@
             </select>
           </div>
           <div class="field row"><label style="margin:0">Zoom</label><input type="range" id="vZoom" min="100" max="400" value="100" style="flex:1"><input type="number" class="numval" id="vZoomNum" min="100" max="400" step="1" value="100"></div>
+          <div class="field row"><label style="margin:0">Rounded corners</label><input type="range" id="vRound" min="0" max="50" value="0" style="flex:1"><input type="number" class="numval" id="vRoundNum" min="0" max="50" step="1" value="0"></div>
+          <p class="hint">0 is square; 50 is fully rounded. Saved PNG corners stay transparent.</p>
           <div class="two">
             <button class="btn secondary" id="vRotL" disabled><i data-lucide="rotate-ccw"></i> 90°</button>
             <button class="btn secondary" id="vRotR" disabled>90° <i data-lucide="rotate-cw"></i></button>
@@ -1338,7 +1340,8 @@ function vLoadFiles(list){
       const c=document.createElement('canvas'); c.width=W; c.height=H;
       const g=c.getContext('2d'); g.drawImage(im,0,0,W,H);
       const data=g.getImageData(0,0,W,H);
-      vImages.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, W, H, data, crop:{cx:W/2,cy:H/2,z:1,a:W/H}, s:(vActive>=0?{...vImages[vActive].s}:vSettings())});
+      const inheritedRound=vActive>=0?(vImages[vActive].crop.round||0):0;
+      vImages.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, W, H, data, crop:{cx:W/2,cy:H/2,z:1,a:W/H,round:inheritedRound}, s:(vActive>=0?{...vImages[vActive].s}:vSettings())});
       if(vActive<0) vActive=0;
       if(--pending===0){ $('vempty').style.display='none'; vEnable(true); vSelect(vActive); if(vHi<0) vSnap(); }
     };
@@ -1350,6 +1353,7 @@ function vSelect(idx){
   vActive=idx; const im=vImages[idx];
   vSetSliders(im.s);
   const z=Math.round((im.crop&&im.crop.z?im.crop.z:1)*100); $('vZoom').value=z; $('vZoomNum').value=z;
+  const round=Math.max(0,Math.min(50,im.crop&&im.crop.round||0)); $('vRound').value=round; $('vRoundNum').value=round;
   vRenderActive(); vRenderThumbs();
   $('vmeta').textContent=`${im.W}×${im.H}px · photo ${idx+1} of ${vImages.length}`;
   const multi=vImages.length>1; $('vPrev').disabled=!multi; $('vNext').disabled=!multi;
@@ -1404,13 +1408,23 @@ function clampCenter(im){ const c=im.crop, a=c.a;
   const w=fitW/c.z, h=fitH/c.z;
   c.cx=Math.max(w/2,Math.min(im.W-w/2,c.cx)); c.cy=Math.max(h/2,Math.min(im.H-h/2,c.cy));
 }
+function roundedRectPath(ctx,x,y,w,h,r){
+  const rr=Math.max(0,Math.min(r,w/2,h/2)); ctx.beginPath();
+  ctx.moveTo(x+rr,y); ctx.lineTo(x+w-rr,y); ctx.quadraticCurveTo(x+w,y,x+w,y+rr);
+  ctx.lineTo(x+w,y+h-rr); ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);
+  ctx.lineTo(x+rr,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-rr);
+  ctx.lineTo(x,y+rr); ctx.quadraticCurveTo(x,y,x+rr,y); ctx.closePath();
+}
 function vComposeExport(im){
   const g=vGradedFull(im), cr=cropRect(im);
   const cw=Math.max(1,Math.round(cr.w)), ch=Math.max(1,Math.round(cr.h));
   const out=document.createElement('canvas'); out.width=cw; out.height=ch;
   const o=out.getContext('2d');
+  const radius=Math.min(cw,ch)*Math.max(0,Math.min(50,im.crop.round||0))/100;
+  o.save(); roundedRectPath(o,0,0,cw,ch,radius); o.clip();
   o.drawImage(g, cr.x, cr.y, cr.w, cr.h, 0, 0, cw, ch);
   drawWatermark(o, cw, ch);
+  o.restore();
   return out;
 }
 // PFP-style crop: fixed centered frame, image panned/zoomed behind it
@@ -1571,8 +1585,8 @@ $('vCropBtn').addEventListener('click',()=>{
 });
 $('vCropReset').addEventListener('click',()=>{
   if(vActive<0) return; const im=vImages[vActive];
-  im.crop={cx:im.W/2, cy:im.H/2, z:1, a:currentAspect(im)};
-  $('vZoom').value=100; $('vZoomNum').value=100; vRenderActive();
+  im.crop={cx:im.W/2, cy:im.H/2, z:1, a:currentAspect(im), round:0};
+  $('vZoom').value=100; $('vZoomNum').value=100; $('vRound').value=0; $('vRoundNum').value=0; vRenderActive();
 });
 function currentAspect(im){ const v=$('vAspect').value; return v==='free'? im.W/im.H : parseFloat(v); }
 $('vAspect').addEventListener('change',()=>{ if(vActive<0) return;
@@ -1583,17 +1597,18 @@ $('vAspect').addEventListener('change',()=>{ if(vActive<0) return;
 });
 $('vCropAll').addEventListener('click',()=>{
   if(vActive<0) return; const s=vImages[vActive], nx=s.crop.cx/s.W, ny=s.crop.cy/s.H;
-  vImages.forEach(im=>{ im.crop.a=s.crop.a; im.crop.z=s.crop.z; im.crop.cx=nx*im.W; im.crop.cy=ny*im.H; clampCenter(im); });
+  vImages.forEach(im=>{ im.crop.a=s.crop.a; im.crop.z=s.crop.z; im.crop.round=s.crop.round||0; im.crop.cx=nx*im.W; im.crop.cy=ny*im.H; clampCenter(im); });
   vRenderActive();
 });
 function vRotate(dir){
   if(vActive<0) return; const im=vImages[vActive], W=im.W, H=im.H;
+  const round=im.crop.round||0;
   const src=document.createElement('canvas'); src.width=W; src.height=H; src.getContext('2d').putImageData(im.data,0,0);
   const mk=source=>{ const c=document.createElement('canvas'); c.width=H; c.height=W; const g=c.getContext('2d');
     g.translate(H/2,W/2); g.rotate(dir*Math.PI/2); g.drawImage(source,-W/2,-H/2); return c; };
   im.data=mk(src).getContext('2d').getImageData(0,0,H,W);
   im.tight=mk(im.tight);
-  im.W=H; im.H=W; im.crop={cx:im.W/2, cy:im.H/2, z:1, a:currentAspect(im)};
+  im.W=H; im.H=W; im.crop={cx:im.W/2, cy:im.H/2, z:1, a:currentAspect(im), round};
   $('vZoom').value=100; $('vZoomNum').value=100;
   vRenderActive(); vRenderThumbs(); $('vmeta').textContent=`${im.W}×${im.H}px · photo ${vActive+1} of ${vImages.length}`;
 }
@@ -1629,6 +1644,13 @@ $('vSyncAll').addEventListener('change',()=>{
   $(s).addEventListener('input',()=>{ $(n).value=$(s).value; upd(); });
   $(n).addEventListener('input',()=>{ let x=parseFloat($(n).value); if(isNaN(x))return; x=Math.max(+$(s).min,Math.min(+$(s).max,x)); $(s).value=x; upd(); });
 });
+function vUpdateRound(value){
+  if(vActive<0) return; const round=Math.max(0,Math.min(50,+value||0));
+  if($('vSyncAll').checked) vImages.forEach(im=>im.crop.round=round); else vImages[vActive].crop.round=round;
+  vRenderActive();
+}
+$('vRound').addEventListener('input',()=>{ $('vRoundNum').value=$('vRound').value; vUpdateRound($('vRound').value); });
+$('vRoundNum').addEventListener('input',()=>{ let x=parseFloat($('vRoundNum').value); if(isNaN(x))return; x=Math.max(0,Math.min(50,x)); $('vRound').value=x; vUpdateRound(x); });
 let vPanLast=null;
 function vEvtCanvas(e){ const r=vCanvas.getBoundingClientRect(); return { x:(e.clientX-r.left)*(vCanvas.width/r.width), y:(e.clientY-r.top)*(vCanvas.height/r.height) }; }
 vCanvas.addEventListener('pointerdown',e=>{

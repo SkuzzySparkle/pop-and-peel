@@ -15,7 +15,7 @@
     --lilac:#EFE4FF; --badge-fg:#8A5CF6;
     --line:#F3D3E6; --panel:#FFFFFF; --input:#FFFBFD;
     --check:#F0E6F5; --dz:#FCFBFE;
-    --shadow:0 10px 30px rgba(138,92,246,.12);
+    --shadow:0 6px 18px rgba(138,92,246,.09);
     --switch-off:#E6D5EE;
     --g1:#FFF0F7; --g2:#F1E9FF; --g3:#E9FBF3; --g4:#FFF7E6; --g5:#EAF3FF; --g6:#FFEFE9;
   }
@@ -26,7 +26,7 @@
     --lilac:#33253f; --badge-fg:#C9B0FF;
     --line:#3d2b49; --panel:#241a2e; --input:#2d2138;
     --check:#26202e; --dz:#1c1524;
-    --shadow:0 10px 30px rgba(0,0,0,.35);
+    --shadow:0 6px 18px rgba(0,0,0,.28);
     --switch-off:#43354f;
     --g1:#2e1f2b; --g2:#251b34; --g3:#182a24; --g4:#2c2718; --g5:#182533; --g6:#2e2019;
   }
@@ -53,6 +53,10 @@
     font-family:'Fredoka';font-weight:600;font-size:13px;padding:8px 14px;border-radius:999px;cursor:pointer;
     display:flex;align-items:center;gap:7px;transition:.15s;}
   .darkbtn:hover{border-color:var(--pink);}
+  .darkbtn:disabled{opacity:.42;cursor:not-allowed;}
+  .header-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .header-actions .darkbtn{padding:8px 12px;}
+  .header-actions .danger{color:var(--pink-deep);}
   .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
 
   .grid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;}
@@ -86,19 +90,10 @@
   .controls{padding:14px;}
   .controls .group + .group{margin-top:11px;}
   .controls > .group{border-radius:15px;padding:11px 12px 12px;border:1px solid var(--line);}
-  .controls > .group:nth-of-type(1){background:var(--g1);}
-  .controls > .group:nth-of-type(2){background:var(--g2);}
-  .controls > .group:nth-of-type(3){background:var(--g3);}
-  .controls > .group:nth-of-type(4){background:var(--g4);}
-  .controls > .group:nth-of-type(5){background:var(--g5);}
-  .controls > .group:nth-of-type(6){background:var(--g6);}
-  .controls > .group:nth-of-type(7){background:var(--g1);}
   .bgrid > .bcol{border-radius:15px;padding:11px 12px 12px;border:1px solid var(--line);}
-  .bgrid > .bcol:nth-of-type(1){background:var(--g3);}
-  .bgrid > .bcol:nth-of-type(2){background:var(--g4);}
-  .bgrid > .bcol:nth-of-type(3){background:var(--g6);}
+  .controls > .group,.bgrid > .bcol{background:var(--input);}
   .glabel{font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;color:var(--pink-deep);
-    text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:7px;}
+    letter-spacing:.1px;margin:0 0 8px;display:flex;align-items:center;gap:7px;}
 
   .field{margin-bottom:8px;}
   .field:last-child{margin-bottom:0;}
@@ -196,7 +191,6 @@
   .mini .btn{width:auto;}
   input[type=file]{display:none;}
   .hint{font-size:11px;color:var(--muted);font-weight:600;line-height:1.4;margin-top:5px;}
-  a.reset{font-size:12px;font-weight:800;color:var(--grape);cursor:pointer;text-decoration:none;}
   .iconbtn{width:34px;height:34px;border-radius:10px;border:1.5px solid var(--grape);background:var(--lilac);
     color:var(--grape);font-size:18px;font-weight:800;line-height:1;cursor:pointer;transition:.12s;padding:0;
     display:inline-flex;align-items:center;justify-content:center;}
@@ -209,6 +203,11 @@
   .thumb .x svg{width:11px;height:11px;stroke-width:3;}
   .addthumb svg{width:20px;height:20px;stroke-width:2.4;}
   button svg{pointer-events:none;}
+  @media (max-width:680px){
+    .tagline{display:none;}
+    header.top{gap:9px;}
+    .header-actions{width:100%;justify-content:flex-end;}
+  }
   .two{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
   .seg{display:inline-flex;border:1.5px solid var(--line);border-radius:11px;overflow:hidden;background:var(--input);}
   .seg button{border:none;background:none;font-family:'Nunito';font-weight:800;font-size:13px;color:var(--sub);
@@ -235,7 +234,11 @@
     </nav>
     <span class="tagline" id="tagline">add outlines &amp; text to stickers with ease</span>
     <span class="spacer"></span>
-    <button class="darkbtn" id="darkToggle"><span id="darkIcon"><i data-lucide="moon"></i></span><span id="darkLabel">Dark</span></button>
+    <div class="header-actions">
+      <button class="darkbtn" id="reset" type="button"><i data-lucide="rotate-ccw"></i><span>Reset</span></button>
+      <button class="darkbtn danger" id="clearAll" type="button"><i data-lucide="x"></i><span>Clear all</span></button>
+      <button class="darkbtn" id="darkToggle" type="button"><span id="darkIcon"><i data-lucide="moon"></i></span><span id="darkLabel">Dark</span></button>
+    </div>
   </header>
 
   <div id="page-contour" class="page active">
@@ -335,9 +338,6 @@
         <button class="iconbtn" id="cNext" title="Next sticker" disabled><i data-lucide="chevron-right"></i></button>
         <button class="iconbtn" id="undo" title="Undo (Ctrl/Cmd+Z)" disabled><i data-lucide="undo-2"></i></button>
         <button class="iconbtn" id="redo" title="Redo (Ctrl/Cmd+Shift+Z)" disabled><i data-lucide="redo-2"></i></button>
-        <a class="reset" id="resetPos">reset position</a>
-        <a class="reset" id="reset">reset settings</a>
-        <a class="reset" id="clearAll">clear all</a>
         <div class="mini"><button class="btn secondary" id="browse">Add files</button></div>
       </div>
       <p class="hint">Mirror bakes into the saved PNG (great for iron-on / transfer). Everything runs in your browser; nothing uploads.</p>
@@ -1184,13 +1184,13 @@ dz.addEventListener('click',()=>{ if(active<0) $('file').click(); });
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
 dz.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) loadFiles(e.dataTransfer.files); });
 
-$('resetPos').addEventListener('click',()=>{ if(active>=0){ images[active].pos=null; scheduleRender(); } });
-$('reset').addEventListener('click',()=>{
+function resetContourSettings(){
   const d={offset:14,smoothing:2,holeBorder:6,strokeW:4,thresh:50,fontSize:18,letterSpace:2,inset:6,fillColor:'#ffffff',strokeColor:'#ff6fb5',textColor:'#3a2140',font:'Fredoka',text:'© YOUR NAME HERE'};
   const c={fillOn:true,strokeOn:false,repeat:false,flipText:false,flipDir:false,flip:false,sheet:false,holes:false};
   for(const k in d) $(k).value=d[k]; for(const k in c) $(k).checked=c[k];
+  images.forEach(im=>im.pos=null);
   setZone(8); syncAll(); syncFillSeg(); toggleFontCustom(); scheduleRender(); pushHistory();
-});
+}
 
 // dark mode
 $('darkToggle').addEventListener('click',()=>{
@@ -1710,16 +1710,16 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='ArrowRight'){ $('cNext').click(); }
   }
 });
-$('clearAll').addEventListener('click',()=>{
+function clearContourAll(){
   const hasWork = images.length>0;
   if(hasWork && !confirm('Clear all images and reset every setting? This can’t be undone.')) return;
   images=[]; active=-1; activeRail=null;
   stage.classList.remove('placing'); $('empty').style.display='grid';
   $('download').disabled=true; $('downloadAll').disabled=true; $('toText').disabled=true; $('meta').textContent='no image loaded';
   stage.width=10; stage.height=10; sctx.clearRect(0,0,10,10); renderThumbs();
-  $('reset').click();                       // reset settings (also pushes history)
+  resetContourSettings();
   history=[gather()]; hidx=0; updateUndoButtons();
-});
+}
 
 // ---------- text studio ----------
 const tCanvas=$('tCanvas'), tctx=tCanvas.getContext('2d');
@@ -1944,6 +1944,42 @@ function tCloseEditor(){ if(tEditor){ const ta=tEditor; tEditor=null; ta.remove(
 $('tDownload').addEventListener('click',()=>{ tCompose().toBlob(b=>{ const url=URL.createObjectURL(b),a=document.createElement('a');
   a.href=url; a.download=((tImg&&tImg.name)||'text')+'-design.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),800); },'image/png'); });
 $('tToContour').addEventListener('click',()=>{ tCompose().toBlob(b=>{ const f=new File([b], ((tImg&&tImg.name)||'text')+'-design.png',{type:'image/png'}); loadFiles([f]); document.querySelector('.tab[data-page="contour"]').click(); },'image/png'); });
+
+function resetTextLayer(){
+  const ly=tCur(); if(!ly) return;
+  const W=tImg?tImg.W:600, H=tImg?tImg.H:600;
+  Object.assign(ly,{x:W/2,y:H/2,size:Math.max(24,Math.round(Math.min(W,H)*0.13)),color:'#3a2140',font:'Fredoka',
+    curve:0,rot:0,lineHeight:1.18,letter:0,strokeOn:false,strokeColor:'#ffffff',strokeW:6,
+    follow:false,followPos:0,followInset:14,followFlip:false});
+  tSync(); tRender();
+}
+function clearVibrancyAll(){
+  if(!vImages.length) return;
+  if(!confirm('Clear all photos from Vibrancy? This can’t be undone.')) return;
+  vImages=[]; vActive=-1; vHist=[]; vHi=-1; vUpdUndo(); vSetSliders(null);
+  $('vempty').style.display='grid'; vEnable(false); $('vmeta').textContent='no image loaded';
+  vCanvas.width=10; vCanvas.height=10; vCtx.clearRect(0,0,10,10); vRenderThumbs();
+}
+function clearTextAll(){
+  if(!tImg && !tLayers.length) return;
+  if(!confirm('Clear the image and every text layer? This can’t be undone.')) return;
+  tCloseEditor(); tImg=null; tLayers=[]; tActive=-1; tRefreshLayers();
+  $('tempty').style.display='grid'; $('tDownload').disabled=true; $('tToContour').disabled=true; $('tmeta').textContent='no image loaded';
+  tCanvas.width=10; tCanvas.height=10; tctx.clearRect(0,0,10,10);
+}
+function activeStudio(){ const tab=document.querySelector('.tab.active'); return tab?tab.dataset.page:'contour'; }
+$('reset').addEventListener('click',()=>{
+  const pg=activeStudio();
+  if(pg==='contour') resetContourSettings();
+  else if(pg==='vibrancy'){ $('vReset').click(); $('vCropReset').click(); }
+  else resetTextLayer();
+});
+$('clearAll').addEventListener('click',()=>{
+  const pg=activeStudio();
+  if(pg==='contour') clearContourAll();
+  else if(pg==='vibrancy') clearVibrancyAll();
+  else clearTextAll();
+});
 
 // init
 createIcons();

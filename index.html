@@ -117,6 +117,9 @@
   input[type=text]{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:11px;
     font-family:'Nunito';font-weight:700;font-size:14px;color:var(--ink);background:var(--input);}
   input[type=text]:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(255,111,181,.18);}
+  textarea{width:100%;min-height:64px;padding:8px 10px;border:1.5px solid var(--line);border-radius:11px;
+    font-family:'Nunito';font-weight:700;font-size:14px;color:var(--ink);background:var(--input);resize:vertical;line-height:1.35;}
+  textarea:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(255,111,181,.18);}
   select{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:11px;background:var(--input);
     font-family:'Nunito';font-weight:700;font-size:13.5px;color:var(--ink);cursor:pointer;}
 
@@ -164,7 +167,7 @@
     background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0;
     background-color:var(--dz);border:2px dashed var(--line);overflow:hidden;transition:background-color .25s;}
   .dropzone.drag{border-color:var(--pink);}
-  #stageCanvas,#vCanvas{max-width:100%;max-height:64vh;image-rendering:auto;display:block;touch-action:none;}
+  #stageCanvas,#vCanvas,#tCanvas{max-width:100%;max-height:64vh;image-rendering:auto;display:block;touch-action:none;}
   #stageCanvas.placing{cursor:crosshair;}
   .empty{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;
     text-align:center;pointer-events:none;color:var(--muted);padding:24px;}
@@ -228,6 +231,7 @@
     <nav class="tabs">
       <button class="tab active" data-page="contour">Contour</button>
       <button class="tab" data-page="vibrancy">Vibrancy</button>
+      <button class="tab" data-page="text">Text</button>
     </nav>
     <span class="tagline" id="tagline">add outlines &amp; text to stickers with ease</span>
     <span class="spacer"></span>
@@ -249,9 +253,6 @@
           <input type="range" id="smoothing" min="0" max="12" value="2">
           <p class="hint">Higher rounds off the jagged pixel edge.</p>
         </div>
-      </div>
-      <div class="group">
-        <p class="glabel"><i data-lucide="palette"></i>Fill & stroke</p>
         <div class="field">
           <label>Outline fill</label>
           <div class="seg" id="fillSeg">
@@ -363,6 +364,7 @@
           <button class="btn" id="download" disabled>Save PNG ✦</button>
           <button class="btn secondary" id="downloadAll" disabled style="font-size:14px;padding:13px">Save all</button>
         </div>
+        <button class="btn secondary" id="toText" disabled style="width:100%;margin-top:8px">Add text →</button>
           </div>
           <div class="bcol">
             <p class="glabel"><i data-lucide="bookmark"></i>Templates</p>
@@ -378,7 +380,7 @@
           <a class="reset" id="tplExport">copy settings code</a>
           <a class="reset" id="tplImport">paste settings code</a>
         </div>
-        <p class="hint" id="tplHint">Saves your contour, colors, text style &amp; target zone. Stored in this browser; use the codes to move a look between devices.</p>
+        <p class="hint" id="tplHint">Saves your contour, colors, text style &amp; target zone. Stored in this browser.</p>
           </div>
         </div>
       </div>
@@ -421,9 +423,8 @@
             <p class="hint">Warm (peach) ←→ cool (blue).</p>
           </div>
           <div class="field">
-            <div class="row"><label style="margin:0">Tint</label><input type="number" class="numval" id="vTintNum" min="-100" max="100" step="1" value="0"></div>
-            <input type="range" id="vTint" min="-100" max="100" value="0">
-            <p class="hint">Green ←→ magenta.</p>
+            <div class="two"><button class="btn secondary" id="vWBPick" disabled>Pick white point</button><button class="btn secondary" id="vWBReset" disabled>Reset</button></div>
+            <p class="hint">Click a spot that should be white or neutral gray, and it re-balances the whole photo from there.</p>
           </div>
         </div>
 
@@ -549,6 +550,91 @@
     </div>
   </div><!-- /page-vibrancy -->
 
+  <div id="page-text" class="page">
+    <div class="grid">
+      <div class="panel controls">
+        <div class="group">
+          <p class="glabel"><i data-lucide="type"></i>Text</p>
+          <div class="field"><label>Text (Enter = new line)</label><textarea id="tText" rows="2" spellcheck="false">Your text</textarea></div>
+          <div class="field"><label>Font</label>
+            <select id="tFont">
+              <option value="Fredoka">Fredoka</option>
+              <option value="Nunito">Nunito</option>
+              <option value="Arial">Arial</option>
+              <option value="Georgia">Georgia</option>
+              <option value="__custom__">Custom / installed font…</option>
+            </select>
+            <input type="text" id="tFontCustom" placeholder="Exact font name, e.g. Comic Sans MS" spellcheck="false" style="display:none;margin-top:8px">
+            <div class="two" style="margin-top:8px">
+              <button class="btn secondary" id="tFontSystem" style="font-size:12px;padding:8px">List installed…</button>
+              <button class="btn secondary" id="tFontUpload" style="font-size:12px;padding:8px">Upload font</button>
+            </div>
+          </div>
+          <div class="field row"><label style="margin:0">Size</label><input type="range" id="tSize" min="8" max="400" value="80" style="flex:1"><input type="number" class="numval" id="tSizeNum" min="8" max="400" step="1" value="80"></div>
+          <div class="field row"><label style="margin:0">Line spacing</label><input type="range" id="tLine" min="0.7" max="2.5" step="0.05" value="1.18" style="flex:1"><input type="number" class="numval" id="tLineNum" min="0.7" max="2.5" step="0.05" value="1.18"></div>
+          <div class="field row"><label style="margin:0">Letter spacing</label><input type="range" id="tLetter" min="-10" max="40" value="0" style="flex:1"><input type="number" class="numval" id="tLetterNum" min="-10" max="40" step="1" value="0"></div>
+          <div class="field row"><label style="margin:0">Color</label><span class="spacer"></span><input type="text" class="hex" id="tColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="tColor" value="#3a2140"></div>
+        </div>
+        <div class="group">
+          <p class="glabel"><i data-lucide="palette"></i>Style</p>
+          <div class="field"><label class="toggle"><input type="checkbox" id="tStrokeOn"><span class="switch"></span><span class="t-label">Outline</span></label></div>
+          <div class="field row"><label style="margin:0">Outline color</label><span class="spacer"></span><input type="text" class="hex" id="tStrokeColorHex" value="#FFFFFF" spellcheck="false"><input type="color" class="color" id="tStrokeColor" value="#ffffff"></div>
+          <div class="field row"><label style="margin:0">Outline width</label><input type="range" id="tStrokeW" min="0" max="40" value="6" style="flex:1"><input type="number" class="numval" id="tStrokeWNum" min="0" max="40" step="1" value="6"></div>
+          <div class="field row"><label style="margin:0">Curve</label><input type="range" id="tCurve" min="-100" max="100" value="0" style="flex:1"><input type="number" class="numval" id="tCurveNum" min="-100" max="100" step="1" value="0"></div>
+          <div class="field row"><label style="margin:0">Rotate</label><input type="range" id="tRot" min="-180" max="180" value="0" style="flex:1"><input type="number" class="numval" id="tRotNum" min="-180" max="180" step="1" value="0"></div>
+        </div>
+        <div class="group">
+          <p class="glabel"><i data-lucide="spline"></i>Follow outline</p>
+          <div class="field"><label class="toggle"><input type="checkbox" id="tFollow"><span class="switch"></span><span class="t-label">Wrap text around the shape</span></label>
+            <p class="hint">Runs this layer along the image's silhouette, like a sticker rail.</p>
+          </div>
+          <div class="field row"><label style="margin:0">Position</label><input type="range" id="tFollowPos" min="0" max="100" value="0" style="flex:1"><input type="number" class="numval" id="tFollowPosNum" min="0" max="100" step="1" value="0"></div>
+          <div class="field row"><label style="margin:0">Distance</label><input type="range" id="tFollowInset" min="0" max="80" value="14" style="flex:1"><input type="number" class="numval" id="tFollowInsetNum" min="0" max="80" step="1" value="14"></div>
+          <div class="field"><label class="toggle"><input type="checkbox" id="tFollowFlip"><span class="switch"></span><span class="t-label">Flip reading direction</span></label></div>
+        </div>
+        <div class="group">
+          <p class="glabel"><i data-lucide="layers"></i>Layers</p>
+          <div class="two">
+            <button class="btn secondary" id="tAddLayer">+ Add text</button>
+            <button class="btn secondary" id="tDelLayer">Delete</button>
+          </div>
+          <div class="field" style="margin-top:8px"><select id="tLayerList"></select></div>
+          <p class="hint">Drag text on the image to move it. Select a layer here to edit it.</p>
+        </div>
+      </div>
+      <div class="rightcol">
+        <div class="panel stage-wrap">
+          <div class="dropzone" id="tdrop">
+            <canvas id="tCanvas" width="10" height="10"></canvas>
+            <div class="empty" id="tempty">
+              <div class="big">✏️✨</div>
+              <div class="h">Drop a design to add text</div>
+              <div class="s">Add curved, colored text with your own fonts, then send it to Contour to cut the sticker.</div>
+            </div>
+          </div>
+          <div class="stage-foot">
+            <span class="meta" id="tmeta">no image loaded</span>
+            <span class="spacer"></span>
+            <div class="mini"><button class="btn secondary" id="tBrowse">Choose file</button></div>
+          </div>
+        </div>
+        <div class="panel bottom">
+          <div class="bgrid">
+            <div class="bcol">
+              <p class="glabel"><i data-lucide="save"></i>Output</p>
+              <button class="btn" id="tDownload" disabled>Save PNG</button>
+              <button class="btn secondary" id="tToContour" disabled style="margin-top:8px;width:100%">Use in Contour →</button>
+            </div>
+            <div class="bcol">
+              <p class="glabel"><i data-lucide="type"></i>Tips</p>
+              <p class="hint">Curve arches text like a rainbow (+ up, − down). Outline helps it read on busy art. Add multiple layers for stacked words.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /page-text -->
+
   <footer class="site-foot">
     <span>Made with <span class="hrt">♥</span> by <a id="creditLink" href="https://skuzzysparkle.com" target="_blank" rel="noopener">Skuzzy Sparkle</a></span>
     <a class="donate" id="donateLink" href="#" target="_blank" rel="noopener">☕ Donate</a>
@@ -559,6 +645,8 @@
 <input type="file" id="vfile" accept="image/png,image/*" multiple>
 <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/*">
 <input type="file" id="wmLogoFile" accept="image/png,image/*">
+<input type="file" id="tfile" accept="image/png,image/*">
+<input type="file" id="tFontFile" accept=".ttf,.otf,.woff,.woff2,font/*">
 
 <script>
 "use strict";
@@ -578,6 +666,7 @@ const LUCIDE={
 "crop":'<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
 "stamp":'<path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 2 1 2 1 3.5V13"/>',
 "heart":'<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+"layers":'<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
 "undo-2":'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/>',
 "redo-2":'<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13"/>',
 "chevron-left":'<path d="m15 18-6-6 6-6"/>',
@@ -588,7 +677,8 @@ const LUCIDE={
 "moon":'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
 "sun":'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
 "x":'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-"plus":'<path d="M5 12h14"/><path d="M12 5v14"/>'
+"plus":'<path d="M5 12h14"/><path d="M12 5v14"/>',
+"layers":'<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>'
 };
 function createIcons(root){
   (root||document).querySelectorAll('[data-lucide]').forEach(el=>{
@@ -637,7 +727,7 @@ function loadFiles(fileList){
       c.getContext('2d').drawImage(im,0,0,W,H);
       images.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, tw:W, th:H, W, H, pad:0, work:c, mask:null, dist:null, cacheKey:'', pos:null});
       if(active<0) active=0;
-      if(--pending===0){ $('empty').style.display='none'; $('download').disabled=false; $('downloadAll').disabled=false;
+      if(--pending===0){ $('empty').style.display='none'; $('download').disabled=false; $('downloadAll').disabled=false; $('toText').disabled=false;
         stage.classList.add('placing'); renderThumbs(); render(); }
     };
     im.onerror=()=>{ if(--pending===0){ renderThumbs(); render(); } };
@@ -935,13 +1025,13 @@ function renderThumbs(){
   if(images.length){ const add=document.createElement('button'); add.className='addthumb'; add.innerHTML='<i data-lucide="plus"></i>';
     add.onclick=()=>$('file').click(); wrap.appendChild(add); }
   const multi=images.length>1, cp=$('cPrev'), cn=$('cNext'); if(cp)cp.disabled=!multi; if(cn)cn.disabled=!multi;
-  if(window.lucide) lucide.createIcons();
+  createIcons();
 }
 function removeImage(idx){
   images.splice(idx,1);
   if(active>=images.length) active=images.length-1;
   if(!images.length){ active=-1; stage.classList.remove('placing'); $('empty').style.display='grid';
-    $('download').disabled=true; $('downloadAll').disabled=true; $('meta').textContent='no image loaded';
+    $('download').disabled=true; $('downloadAll').disabled=true; $('toText').disabled=true; $('meta').textContent='no image loaded';
     stage.width=10; stage.height=10; sctx.clearRect(0,0,10,10); }
   renderThumbs(); render();
 }
@@ -1078,6 +1168,11 @@ function setZone(z){ curZone=z; [...$('target').children].forEach(c=>c.classList
 
 $('download').addEventListener('click',()=>{ if(active>=0) saveOne(images[active]); });
 $('downloadAll').addEventListener('click',saveAll);
+$('toText').addEventListener('click',()=>{ if(active<0) return;
+  const out=exportCanvas(images[active], readState());
+  out.toBlob(b=>{ const f=new File([b], (images[active].name||'sticker')+'.png', {type:'image/png'});
+    tLoad(f); document.querySelector('.tab[data-page="text"]').click(); },'image/png');
+});
 $('browse').addEventListener('click',()=>$('file').click());
 $('cPrev').addEventListener('click',()=>{ if(images.length<2) return; active=(active-1+images.length)%images.length; renderThumbs(); render(); });
 $('cNext').addEventListener('click',()=>{ if(images.length<2) return; active=(active+1)%images.length; renderThumbs(); render(); });
@@ -1101,7 +1196,7 @@ $('reset').addEventListener('click',()=>{
 $('darkToggle').addEventListener('click',()=>{
   const dark=document.body.classList.toggle('dark');
   $('darkIcon').innerHTML='<i data-lucide="'+(dark?'sun':'moon')+'"></i>'; $('darkLabel').textContent=dark?'Light':'Dark';
-  if(window.lucide) lucide.createIcons();
+  createIcons();
 });
 
 // ---------- templates ----------
@@ -1167,11 +1262,11 @@ $('tplImport').addEventListener('click',()=>{
 
 // ---------- page nav ----------
 function activatePage(pg){
-  if(pg!=='contour' && pg!=='vibrancy') pg='contour';
+  if(pg!=='contour' && pg!=='vibrancy' && pg!=='text') pg='contour';
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.page===pg));
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   $('page-'+pg).classList.add('active');
-  $('tagline').textContent = pg==='vibrancy' ? 'bulk-grade & test your print colors~' : 'add outlines & text to stickers with ease';
+  $('tagline').textContent = pg==='vibrancy' ? 'bulk-grade & test your print colors~' : pg==='text' ? 'add curved, colored text with your own fonts~' : 'add outlines & text to stickers with ease';
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   const pg=t.dataset.page; activatePage(pg);
@@ -1181,7 +1276,7 @@ window.addEventListener('hashchange',()=>activatePage(location.hash.replace('#',
 
 // ---------- vibrancy page (multi-image) ----------
 const vCanvas=$('vCanvas'), vCtx=vCanvas.getContext('2d');
-const VMAX=1600, VSLIDERS=['vVibrance','vSat','vBright','vContrast','vWarm','vTint','vCyan','vMagenta','vYellow','vBlack'];
+const VMAX=1600, VSLIDERS=['vVibrance','vSat','vBright','vContrast','vWarm','vCyan','vMagenta','vYellow','vBlack'];
 let vImages=[], vActive=-1, vraf=null;               // {name,tight,W,H,data,s}
 const vget=id=>+$(id).value;
 function vSettings(){ const o={}; VSLIDERS.forEach(id=>o[id]=vget(id));
@@ -1231,7 +1326,7 @@ function applyAdjust(imgData, s, W, H){
   return out;
 }
 
-function vEnable(on){ ['vDownload','vDownloadAll','vToContour','vApplyAll','vReset','vPrint','vCropBtn','vCropReset','vRotL','vRotR','vCropAll','vPrev','vNext'].forEach(id=>{ const el=$(id); if(el) el.disabled=!on; }); }
+function vEnable(on){ ['vDownload','vDownloadAll','vToContour','vApplyAll','vReset','vPrint','vCropBtn','vCropReset','vRotL','vRotR','vCropAll','vPrev','vNext','vWBPick','vWBReset'].forEach(id=>{ const el=$(id); if(el) el.disabled=!on; }); }
 function vLoadFiles(list){
   const files=[...list].filter(f=>f.type.startsWith('image')); if(!files.length) return;
   let pending=files.length;
@@ -1358,7 +1453,7 @@ function vRenderThumbs(){
     t.onclick=()=>vSelect(idx); wrap.appendChild(t);
   });
   if(vImages.length){ const add=document.createElement('button'); add.className='addthumb'; add.innerHTML='<i data-lucide="plus"></i>'; add.onclick=()=>$('vfile').click(); wrap.appendChild(add); }
-  if(window.lucide) lucide.createIcons();
+  createIcons();
 }
 function vRemove(idx){
   vImages.splice(idx,1);
@@ -1496,6 +1591,24 @@ $('wmLogoBtn').addEventListener('click',()=>$('wmLogoFile').click());
 $('wmLogoFile').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return;
   const url=URL.createObjectURL(f), img=new Image(); img.onload=()=>{ wmLogo=img; $('wmType').value='logo'; $('wmOn').checked=true; vRenderActive(); }; img.src=url; e.target.value=''; });
 $('wmType').addEventListener('input',()=>vRenderActive());
+// ---- gray-point white balance ----
+let vWBMode=false;
+function vSetWBMode(on){ vWBMode=on; $('vWBPick').textContent=on?'Click the photo…':'Pick white point';
+  vCanvas.style.cursor=on?'crosshair':''; }
+$('vWBPick').addEventListener('click',()=>{ if(vActive<0) return; if(vCropMode){ vCropMode=false; $('vCropBtn').textContent='Start crop'; } vSetWBMode(!vWBMode); vRenderActive(); });
+$('vWBReset').addEventListener('click',()=>{ if(vActive<0) return; const im=vImages[vActive]; im.s.gR=1; im.s.gG=1; im.s.gB=1; vRenderActive(); vRenderThumbs(); vSnap(); });
+vCanvas.addEventListener('pointerdown',e=>{
+  if(!vWBMode||vActive<0) return; e.preventDefault(); e.stopImmediatePropagation();
+  const im=vImages[vActive], r=vCanvas.getBoundingClientRect();
+  const cx=(e.clientX-r.left)*(vCanvas.width/r.width), cy=(e.clientY-r.top)*(vCanvas.height/r.height);
+  const cr=cropRect(im);
+  let sx=Math.round(cr.x + cx/vCanvas.width*cr.w), sy=Math.round(cr.y + cy/vCanvas.height*cr.h);
+  sx=Math.max(0,Math.min(im.W-1,sx)); sy=Math.max(0,Math.min(im.H-1,sy));
+  const d=im.data.data, o=(sy*im.W+sx)*4, R=d[o]||1, G=d[o+1]||1, B=d[o+2]||1;
+  const gray=(R+G+B)/3, cl=v=>Math.max(0.2,Math.min(5,v));
+  im.s.gR=cl(gray/R); im.s.gG=cl(gray/G); im.s.gB=cl(gray/B);
+  vSetWBMode(false); vRenderActive(); vRenderThumbs(); vSnap();
+}, true);
 $('vSyncAll').addEventListener('change',()=>{
   if($('vSyncAll').checked && vActive>=0){ const s=vSettings(); vImages.forEach(im=>im.s={...s}); vRenderThumbs(); vRenderActive(); vSnap(); }
 });
@@ -1590,14 +1703,238 @@ $('clearAll').addEventListener('click',()=>{
   if(hasWork && !confirm('Clear all images and reset every setting? This can’t be undone.')) return;
   images=[]; active=-1; activeRail=null;
   stage.classList.remove('placing'); $('empty').style.display='grid';
-  $('download').disabled=true; $('downloadAll').disabled=true; $('meta').textContent='no image loaded';
+  $('download').disabled=true; $('downloadAll').disabled=true; $('toText').disabled=true; $('meta').textContent='no image loaded';
   stage.width=10; stage.height=10; sctx.clearRect(0,0,10,10); renderThumbs();
   $('reset').click();                       // reset settings (also pushes history)
   history=[gather()]; hidx=0; updateUndoButtons();
 });
 
+// ---------- text studio ----------
+const tCanvas=$('tCanvas'), tctx=tCanvas.getContext('2d');
+let tImg=null, tLayers=[], tActive=-1, tDrag=null, tRot=null, tResize=null, tEditor=null; const TMAX=1600;
+function tGetFont(){ const v=$('tFont').value; return v==='__custom__' ? ($('tFontCustom').value.trim()||'sans-serif') : v; }
+function tCur(){ return tActive>=0?tLayers[tActive]:null; }
+function tLoad(file){
+  if(!file||!file.type.startsWith('image')) return;
+  const url=URL.createObjectURL(file), im=new Image();
+  im.onload=()=>{ URL.revokeObjectURL(url);
+    let w=im.naturalWidth,h=im.naturalHeight; const s=Math.min(1,TMAX/Math.max(w,h));
+    const W=Math.max(1,Math.round(w*s)), H=Math.max(1,Math.round(h*s));
+    const c=document.createElement('canvas'); c.width=W; c.height=H; c.getContext('2d').drawImage(im,0,0,W,H);
+    tImg={canvas:c,W,H,name:file.name.replace(/\.[^.]+$/,'')};
+    $('tempty').style.display='none'; $('tDownload').disabled=false; $('tToContour').disabled=false;
+    $('tmeta').textContent=`${W}×${H}px`;
+    if(!tLayers.length) tAddLayer(); else tRender();
+  };
+  im.src=url;
+}
+function tAddLayer(){
+  const W=tImg?tImg.W:600, H=tImg?tImg.H:600;
+  tLayers.push({text:'Your text', x:W/2, y:H/2, size:Math.max(24,Math.round(Math.min(W,H)*0.13)),
+    color:'#3a2140', font:tGetFont(), curve:0, rot:0, lineHeight:1.18, letter:0, strokeOn:false, strokeColor:'#ffffff', strokeW:6,
+    follow:false, followPos:0, followInset:14, followFlip:false});
+  tActive=tLayers.length-1; tSync(); tRefreshLayers(); tRender();
+}
+function tDelLayer(){ if(tActive<0) return; tLayers.splice(tActive,1); tActive=tLayers.length-1; tSync(); tRefreshLayers(); tRender(); }
+function tRefreshLayers(){ const sel=$('tLayerList'); sel.innerHTML='';
+  tLayers.forEach((ly,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=(i+1)+': '+((ly.text||'').replace(/\n/g,' ').slice(0,18)||'(empty)'); sel.appendChild(o); });
+  if(tActive>=0) sel.value=tActive; }
+function tSync(){ const ly=tCur(); if(!ly) return;
+  $('tText').value=ly.text; $('tSize').value=ly.size; $('tSizeNum').value=ly.size;
+  $('tColor').value=ly.color; $('tColorHex').value=ly.color.toUpperCase();
+  $('tStrokeOn').checked=ly.strokeOn; $('tStrokeColor').value=ly.strokeColor; $('tStrokeColorHex').value=ly.strokeColor.toUpperCase();
+  $('tStrokeW').value=ly.strokeW; $('tStrokeWNum').value=ly.strokeW;
+  $('tCurve').value=ly.curve; $('tCurveNum').value=ly.curve; $('tRot').value=ly.rot; $('tRotNum').value=ly.rot;
+  $('tLine').value=ly.lineHeight!=null?ly.lineHeight:1.18; $('tLineNum').value=$('tLine').value;
+  $('tLetter').value=ly.letter||0; $('tLetterNum').value=ly.letter||0;
+  $('tFollow').checked=!!ly.follow; $('tFollowFlip').checked=!!ly.followFlip;
+  $('tFollowPos').value=ly.followPos||0; $('tFollowPosNum').value=ly.followPos||0;
+  $('tFollowInset').value=ly.followInset!=null?ly.followInset:14; $('tFollowInsetNum').value=$('tFollowInset').value;
+  const opt=[...$('tFont').options].find(o=>o.value===ly.font);
+  if(opt) $('tFont').value=ly.font; else { $('tFont').value='__custom__'; $('tFontCustom').value=ly.font; }
+  $('tFontCustom').style.display=$('tFont').value==='__custom__'?'block':'none';
+}
+function tDrawLayer(ctx, ly){
+  if(!ly.text) return;
+  if(ly.follow){ tDrawFollow(ctx, ly); return; }
+  ctx.save();
+  ctx.font=`700 ${ly.size}px '${ly.font}', sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineJoin='round';
+  ctx.translate(ly.x, ly.y); ctx.rotate(ly.rot*Math.PI/180);
+  const lines=ly.text.split('\n'), lh=ly.size*(ly.lineHeight!=null?ly.lineHeight:1.18), blockH=(lines.length-1)*lh;
+  lines.forEach((line,li)=>tDrawLine(ctx, line, ly, -blockH/2 + li*lh));
+  ctx.restore();
+}
+function tDrawLine(ctx, text, ly, oy){
+  const chars=[...text], ls=ly.letter||0;
+  const stroke=ch=>{ if(ly.strokeOn && ly.strokeW>0 && ch!==' '){ ctx.lineWidth=ly.strokeW*2; ctx.strokeStyle=ly.strokeColor; ctx.strokeText(ch,0,0);} };
+  if(ly.curve===0 || chars.length<2){
+    if(ls===0){
+      if(ly.strokeOn && ly.strokeW>0){ ctx.lineWidth=ly.strokeW*2; ctx.strokeStyle=ly.strokeColor; ctx.strokeText(text,0,oy); }
+      ctx.fillStyle=ly.color; ctx.fillText(text,0,oy); return;
+    }
+    const widths=chars.map(c=>ctx.measureText(c).width+ls), total=widths.reduce((a,b)=>a+b,0)-ls;
+    let x=-total/2;
+    for(let i=0;i<chars.length;i++){ const cx=x+(widths[i]-ls)/2; ctx.save(); ctx.translate(cx,oy);
+      stroke(chars[i]); ctx.fillStyle=ly.color; ctx.fillText(chars[i],0,0); ctx.restore(); x+=widths[i]; }
+  } else {
+    const widths=chars.map(c=>ctx.measureText(c).width+ls), total=widths.reduce((a,b)=>a+b,0)-ls;
+    const angle=Math.abs(ly.curve)/100*Math.PI, R=total/angle;
+    let acc=0;
+    for(let i=0;i<chars.length;i++){
+      const cc=acc+widths[i]/2, theta=(cc/total-0.5)*angle; let x,y,rot;
+      if(ly.curve>0){ x=R*Math.sin(theta); y=oy+R-R*Math.cos(theta); rot=theta; }
+      else { x=R*Math.sin(theta); y=oy-R+R*Math.cos(theta); rot=-theta; }
+      ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+      stroke(chars[i]); ctx.fillStyle=ly.color; ctx.fillText(chars[i],0,0);
+      ctx.restore(); acc+=widths[i];
+    }
+  }
+}
+function tRender(){ if(!tImg) return; tCanvas.width=tImg.W; tCanvas.height=tImg.H;
+  tctx.clearRect(0,0,tImg.W,tImg.H); tctx.drawImage(tImg.canvas,0,0); tLayers.forEach(ly=>tDrawLayer(tctx,ly));
+  const a=tCur(); if(a && !a.follow) tDrawSelection(a); }
+function tCompose(){ const c=document.createElement('canvas'); c.width=tImg.W; c.height=tImg.H; const x=c.getContext('2d');
+  x.drawImage(tImg.canvas,0,0); tLayers.forEach(ly=>tDrawLayer(x,ly)); return c; }
+function tBBox(ly){ tctx.save(); tctx.font=`700 ${ly.size}px '${ly.font}', sans-serif`;
+  const ls=ly.letter||0, lines=(ly.text||'').split('\n'); let w=0;
+  lines.forEach(l=>{ const cw=[...l].reduce((a,c)=>a+tctx.measureText(c).width+ls,0)-ls; w=Math.max(w, cw); }); tctx.restore();
+  const lh=ly.size*(ly.lineHeight!=null?ly.lineHeight:1.18); let bw=w, bh=lines.length*lh;
+  if(ly.curve!==0 && w>0){ const angle=Math.abs(ly.curve)/100*Math.PI, R=w/angle; bh+=(R-R*Math.cos(angle/2)); bw=Math.max(bw, 2*R*Math.sin(angle/2)); }
+  return { w:bw+ly.size*0.4, h:bh+ly.size*0.3 };
+}
+function tDrawSelection(ly){
+  const bb=tBBox(ly), hw=bb.w/2, hh=bb.h/2, s=Math.max(1, tImg.W/520);
+  tctx.save(); tctx.translate(ly.x,ly.y); tctx.rotate(ly.rot*Math.PI/180);
+  tctx.strokeStyle='#FF6FB5'; tctx.lineWidth=2*s; tctx.setLineDash([6*s,4*s]); tctx.strokeRect(-hw,-hh,bb.w,bb.h); tctx.setLineDash([]);
+  const handY=-hh-26*s;
+  tctx.beginPath(); tctx.moveTo(0,-hh); tctx.lineTo(0,handY+9*s); tctx.stroke();
+  tctx.beginPath(); tctx.arc(0,handY,9*s,0,Math.PI*2); tctx.fillStyle='#fff'; tctx.fill(); tctx.stroke();
+  const cs=9*s; tctx.fillStyle='#fff';
+  [[-hw,-hh],[hw,-hh],[-hw,hh],[hw,hh]].forEach(([cx,cy])=>{ tctx.beginPath(); tctx.rect(cx-cs/2,cy-cs/2,cs,cs); tctx.fill(); tctx.stroke(); });
+  tctx.restore();
+  const a=ly.rot*Math.PI/180, R=(dx,dy)=>({x:ly.x+dx*Math.cos(a)-dy*Math.sin(a), y:ly.y+dx*Math.sin(a)+dy*Math.cos(a)});
+  ly._handle=R(0,handY);
+  ly._corners=[R(-hw,-hh),R(hw,-hh),R(-hw,hh),R(hw,hh)]; ly._diag=Math.hypot(hw,hh);
+}
+function tMaskData(){ if(!tImg) return null; const key=tImg.W+'x'+tImg.H;
+  if(tImg._md && tImg._mdKey===key) return tImg._md;
+  const d=tImg.canvas.getContext('2d').getImageData(0,0,tImg.W,tImg.H).data;
+  const mask=new Uint8Array(tImg.W*tImg.H); let any=false;
+  for(let i=0;i<tImg.W*tImg.H;i++){ if(d[i*4+3]>128){mask[i]=1;any=true;} }
+  tImg._md={mask, dist: any?chamferDT(mask,tImg.W,tImg.H):null}; tImg._mdKey=key; return tImg._md;
+}
+function tDrawFollow(ctx, ly){
+  const md=tMaskData(); if(!md||!md.dist) return;
+  const inset=ly.followInset!=null?ly.followInset:14;
+  const railMask=maskFromDist(md.dist, tImg.W, tImg.H, Math.max(0.5,inset));
+  let path=trace(railMask, tImg.W, tImg.H); if(path.length<=8) return;
+  path=smooth(path,3); const pts=resample(path,1), n=pts.length, per=n;
+  ctx.save(); ctx.font=`700 ${ly.size}px '${ly.font}', sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineJoin='round';
+  const chars=[...((ly.text||'').replace(/\n/g,' '))]; if(!chars.length){ ctx.restore(); return; }
+  const adv=c=>ctx.measureText(c).width;
+  let pos=(ly.followPos||0)/100*per;
+  const pointAt=d=>{ let dd=((d%per)+per)%per; return Math.min(n-1,Math.max(0,Math.round(dd))); };
+  for(const ch of chars){ const w=adv(ch), c=pos+w/2, i=pointAt(c);
+    const p0=pts[(i-1+n)%n], p1=pts[(i+1)%n]; let ang=Math.atan2(p1[1]-p0[1], p1[0]-p0[0]); if(ly.followFlip) ang+=Math.PI;
+    const p=pts[i]; ctx.save(); ctx.translate(p[0],p[1]); ctx.rotate(ang);
+    if(ly.strokeOn&&ly.strokeW>0 && ch!==' '){ ctx.lineWidth=ly.strokeW*2; ctx.strokeStyle=ly.strokeColor; ctx.strokeText(ch,0,0); }
+    ctx.fillStyle=ly.color; if(ch!==' ') ctx.fillText(ch,0,0); ctx.restore(); pos+=w; }
+  ctx.restore();
+}
+
+$('tText').addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly.text=$('tText').value; tRefreshLayers(); tRender(); });
+function tBindSlider(s,n,prop){
+  const upd=v=>{ const ly=tCur(); if(!ly)return; ly[prop]=+v; tRender(); };
+  $(s).addEventListener('input',()=>{ $(n).value=$(s).value; upd($(s).value); });
+  $(n).addEventListener('input',()=>{ let x=parseFloat($(n).value); if(isNaN(x))return; x=Math.max(+$(s).min,Math.min(+$(s).max,x)); $(s).value=x; upd(x); });
+}
+tBindSlider('tSize','tSizeNum','size'); tBindSlider('tStrokeW','tStrokeWNum','strokeW'); tBindSlider('tCurve','tCurveNum','curve'); tBindSlider('tRot','tRotNum','rot');
+tBindSlider('tFollowPos','tFollowPosNum','followPos'); tBindSlider('tFollowInset','tFollowInsetNum','followInset');
+tBindSlider('tLine','tLineNum','lineHeight'); tBindSlider('tLetter','tLetterNum','letter');
+$('tFollow').addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly.follow=$('tFollow').checked; tRender(); });
+$('tFollowFlip').addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly.followFlip=$('tFollowFlip').checked; tRender(); });
+function tBindColor(c,h,prop){
+  $(c).addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly[prop]=$(c).value; $(h).value=$(c).value.toUpperCase(); tRender(); });
+  $(h).addEventListener('input',()=>{ let v=$(h).value.trim(); if(/^#?[0-9a-fA-F]{3}$/.test(v)||/^#?[0-9a-fA-F]{6}$/.test(v)){ if(v[0]!=='#')v='#'+v; if(v.length===4)v='#'+[...v.slice(1)].map(x=>x+x).join(''); const ly=tCur(); if(ly){ly[prop]=v.toLowerCase(); $(c).value=v.toLowerCase();} tRender(); } });
+}
+tBindColor('tColor','tColorHex','color'); tBindColor('tStrokeColor','tStrokeColorHex','strokeColor');
+$('tStrokeOn').addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly.strokeOn=$('tStrokeOn').checked; tRender(); });
+$('tFont').addEventListener('change',()=>{ $('tFontCustom').style.display=$('tFont').value==='__custom__'?'block':'none'; const ly=tCur(); if(ly){ ly.font=tGetFont(); tRender(); } });
+$('tFontCustom').addEventListener('input',()=>{ const ly=tCur(); if(ly){ ly.font=tGetFont(); tRender(); } });
+$('tFontUpload').addEventListener('click',()=>$('tFontFile').click());
+$('tFontFile').addEventListener('change',async e=>{ const f=e.target.files[0]; if(!f)return;
+  try{ const buf=await f.arrayBuffer(); const fam='userfont-'+f.name.replace(/\.[^.]+$/,'').replace(/[^a-zA-Z0-9]/g,'')+'-'+Date.now().toString(36);
+    const ff=new FontFace(fam,buf); await ff.load(); document.fonts.add(ff);
+    const opt=document.createElement('option'); opt.value=fam; opt.textContent='📄 '+f.name.replace(/\.[^.]+$/,''); $('tFont').appendChild(opt); $('tFont').value=fam;
+    $('tFontCustom').style.display='none'; const ly=tCur(); if(ly){ ly.font=fam; tRender(); }
+  }catch(err){ alert('Could not load that font file.'); } e.target.value=''; });
+$('tFontSystem').addEventListener('click',async()=>{
+  if(!window.queryLocalFonts){ $('tFont').value='__custom__'; $('tFontCustom').style.display='block'; $('tFontCustom').focus(); return; }
+  try{ const fonts=await window.queryLocalFonts(); const fams=[...new Set(fonts.map(f=>f.family))].sort();
+    fams.forEach(fam=>{ if(![...$('tFont').options].some(o=>o.value===fam)){ const o=document.createElement('option'); o.value=fam; o.textContent=fam; $('tFont').appendChild(o); } }); }catch(err){}
+});
+$('tAddLayer').addEventListener('click',tAddLayer);
+$('tDelLayer').addEventListener('click',tDelLayer);
+$('tLayerList').addEventListener('change',()=>{ tActive=+$('tLayerList').value; tSync(); tRender(); });
+$('tBrowse').addEventListener('click',()=>$('tfile').click());
+$('tfile').addEventListener('change',e=>{ if(e.target.files[0]) tLoad(e.target.files[0]); e.target.value=''; });
+const tdz=$('tdrop');
+tdz.addEventListener('click',()=>{ if(!tImg) $('tfile').click(); });
+['dragover','dragenter'].forEach(ev=>tdz.addEventListener(ev,e=>{e.preventDefault();tdz.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>tdz.addEventListener(ev,e=>{e.preventDefault();tdz.classList.remove('drag');}));
+tdz.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) tLoad(e.dataTransfer.files[0]); });
+function tEvt(e){ const r=tCanvas.getBoundingClientRect(); return {x:(e.clientX-r.left)*(tImg.W/r.width), y:(e.clientY-r.top)*(tImg.H/r.height)}; }
+tCanvas.addEventListener('pointerdown',e=>{ if(!tImg||!tLayers.length) return; e.preventDefault();
+  const p=tEvt(e), act=tCur(), hr=Math.max(14,tImg.W*0.03);
+  if(act && !act.follow){
+    if(act._corners){ for(const c of act._corners){ const dx=p.x-c.x, dy=p.y-c.y; if(dx*dx+dy*dy<hr*hr){
+      tResize={d0:Math.max(1,Math.hypot(p.x-act.x,p.y-act.y)), s0:act.size}; try{tCanvas.setPointerCapture(e.pointerId);}catch(_){}; return; } } }
+    if(act._handle){ const dx=p.x-act._handle.x, dy=p.y-act._handle.y; if(dx*dx+dy*dy<hr*hr){
+      tRot=true; try{tCanvas.setPointerCapture(e.pointerId);}catch(_){}; return; } }
+  }
+  let best=tActive,bd=Infinity;
+  tLayers.forEach((ly,i)=>{ const d=(ly.x-p.x)**2+(ly.y-p.y)**2; if(d<bd){bd=d;best=i;} });
+  tActive=best; tSync(); tRefreshLayers();
+  const ly=tLayers[tActive]; tDrag = ly.follow ? null : {ox:p.x-ly.x, oy:p.y-ly.y};
+  tRender(); try{tCanvas.setPointerCapture(e.pointerId);}catch(_){}
+});
+tCanvas.addEventListener('pointermove',e=>{ if(!tImg) return; const ly=tCur(); if(!ly) return; const p=tEvt(e);
+  if(tResize){ const d=Math.hypot(p.x-ly.x,p.y-ly.y); let s=Math.round(tResize.s0*(d/tResize.d0));
+    s=Math.max(8,Math.min(400,s)); ly.size=s; $('tSize').value=s; $('tSizeNum').value=s; tRender(); return; }
+  if(tRot){ let ang=Math.atan2(p.y-ly.y, p.x-ly.x)*180/Math.PI + 90; ang=((ang+180)%360+360)%360-180;
+    ly.rot=Math.round(ang); $('tRot').value=ly.rot; $('tRotNum').value=ly.rot; tRender(); return; }
+  if(tDrag){ ly.x=p.x-tDrag.ox; ly.y=p.y-tDrag.oy; tRender(); }
+});
+tCanvas.addEventListener('pointerup',()=>{ tDrag=null; tRot=null; tResize=null; });
+tCanvas.addEventListener('pointercancel',()=>{ tDrag=null; tRot=null; tResize=null; });
+tCanvas.addEventListener('dblclick',e=>{ if(!tImg||!tLayers.length) return;
+  const p=tEvt(e); let best=-1,bd=Infinity; tLayers.forEach((ly,i)=>{ const d=(ly.x-p.x)**2+(ly.y-p.y)**2; if(d<bd){bd=d;best=i;} });
+  if(best<0) return; tActive=best; tSync(); tRefreshLayers(); tOpenEditor(tLayers[best]);
+});
+function tOpenEditor(ly){
+  tCloseEditor();
+  const rect=tCanvas.getBoundingClientRect(), drop=$('tdrop').getBoundingClientRect(), sx=rect.width/tImg.W, bb=tBBox(ly);
+  const w=Math.max(90, bb.w*sx), h=Math.max(40, bb.h*sx);
+  const left=(rect.left-drop.left)+ly.x*sx - w/2, top=(rect.top-drop.top)+ly.y*sx - h/2;
+  const ta=document.createElement('textarea'); ta.value=ly.text; ta.spellcheck=false;
+  ta.style.cssText='position:absolute;left:'+left+'px;top:'+top+'px;width:'+w+'px;height:'+h+'px;'+
+    "font-family:'"+ly.font+"',sans-serif;font-weight:700;font-size:"+Math.max(12,ly.size*sx)+'px;line-height:'+(ly.lineHeight||1.18)+';'+
+    'color:'+ly.color+';text-align:center;background:rgba(255,255,255,.94);border:2px solid #FF6FB5;border-radius:8px;'+
+    'padding:2px 4px;resize:none;z-index:30;outline:none;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.18);';
+  $('tdrop').appendChild(ta); ta.focus(); ta.select();
+  ta.addEventListener('input',()=>{ ly.text=ta.value; $('tText').value=ta.value; tRefreshLayers(); tRender(); });
+  ta.addEventListener('blur',tCloseEditor);
+  ta.addEventListener('keydown',ev=>{ if(ev.key==='Escape'){ ev.preventDefault(); tCloseEditor(); } });
+  tEditor=ta;
+}
+function tCloseEditor(){ if(tEditor){ const ta=tEditor; tEditor=null; ta.remove(); tRender(); } }
+$('tDownload').addEventListener('click',()=>{ tCompose().toBlob(b=>{ const url=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=url; a.download=((tImg&&tImg.name)||'text')+'-design.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),800); },'image/png'); });
+$('tToContour').addEventListener('click',()=>{ tCompose().toBlob(b=>{ const f=new File([b], ((tImg&&tImg.name)||'text')+'-design.png',{type:'image/png'}); loadFiles([f]); document.querySelector('.tab[data-page="contour"]').click(); },'image/png'); });
+
 // init
-if(window.lucide) lucide.createIcons();
+createIcons();
 $('donateLink').href = DONATE_URL;
 syncAll(); syncFillSeg(); refreshTplList();
 activatePage(location.hash.replace('#','')||'contour');

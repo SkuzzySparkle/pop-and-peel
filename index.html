@@ -1508,27 +1508,39 @@ $('vPrint').addEventListener('click',()=>{
     const url=vExportCanvas(im).toDataURL('image/png');
     return `<div class="card"><img src="${url}"><div class="nm">${vEsc(im.name)}</div><div class="st">${vEsc(vSettingsLabel(im.s))}</div></div>`;
   }).join('');
-  const w=window.open('','_blank');
-  if(!w){ alert('Allow pop-ups to open the print sheet.'); return; }
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Peel & Pop — print test sheet</title>
+  // Print from an internal frame so wallet/security extensions cannot intercept a popup tab.
+  const frame=document.createElement('iframe');
+  frame.setAttribute('aria-hidden','true');
+  frame.style.cssText='position:fixed;left:-10000px;top:0;width:1px;height:1px;border:0';
+  document.body.appendChild(frame);
+  const doc=frame.contentDocument;
+  doc.open();
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Peel & Pop — print test sheet</title>
   <style>
     *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:16px;color:#3A2140}
-    h1{font-size:20px;margin:0 0 2px}
-    .sub{color:#8a5cf6;font-size:12px;margin:0 0 16px}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-    .card{border:1px solid #eadcf2;border-radius:10px;padding:10px;text-align:center;break-inside:avoid;page-break-inside:avoid}
-    .card img{max-width:100%;max-height:210px;object-fit:contain;background:#faf7fd;border-radius:6px}
-    .nm{font-weight:800;font-size:12px;margin-top:8px}
-    .st{font-size:11px;color:#6E5A7C;margin-top:3px;line-height:1.45}
-    @media print{ body{margin:8mm} .sub{color:#666} }
+    @page{size:letter landscape;margin:5mm}
+    html,body{width:100%;height:100%;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#3A2140;overflow:hidden}
+    h1{font-size:12pt;line-height:1;margin:0 0 1mm}
+    .sub{color:#666;font-size:7pt;line-height:1;margin:0 0 2mm}
+    .grid{height:188mm;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(5,minmax(0,1fr));gap:1.5mm}
+    .card{min-width:0;min-height:0;border:.25mm solid #eadcf2;border-radius:2mm;padding:1mm;text-align:center;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
+    .card img{display:block;width:100%;height:26mm;object-fit:contain;background:#faf7fd;border-radius:1mm}
+    .nm{font-weight:800;font-size:5.5pt;line-height:1.1;margin-top:.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .st{font-size:5pt;color:#6E5A7C;line-height:1.1;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   </style></head><body>
   <h1>Peel &amp; Pop — print test sheet</h1>
-  <p class="sub">Each swatch shows the vibrancy settings used, so you can match your printer to the look you want.</p>
+  <p class="sub">30-image color check · each swatch includes its vibrancy settings</p>
   <div class="grid">${cards}</div>
-  <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},350);};</scr`+`ipt>
   </body></html>`);
-  w.document.close();
+  doc.close();
+  const cleanup=()=>{ if(frame.isConnected) frame.remove(); };
+  frame.contentWindow.addEventListener('afterprint',cleanup,{once:true});
+  setTimeout(()=>{
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+    setTimeout(cleanup,60000);
+  },500);
 });
 
 // saveable grades (per-browser)

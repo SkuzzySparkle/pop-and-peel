@@ -556,6 +556,21 @@
     <div class="grid">
       <div class="panel controls">
         <div class="group">
+          <p class="glabel"><i data-lucide="sparkles"></i>Smart layout</p>
+          <div class="field"><label>Place text</label>
+            <select id="tAutoPlace">
+              <option value="best">Best open space</option>
+              <option value="bottom">Below the sticker</option>
+              <option value="top">Above the sticker</option>
+              <option value="center">Centered on the sticker</option>
+              <option value="around">Around the outline</option>
+            </select>
+          </div>
+          <button class="btn" id="tAutoLayout" disabled>Auto layout</button>
+          <button class="btn secondary" id="tTryLayout" disabled style="margin-top:8px">Try another layout</button>
+          <p class="hint" id="tAutoHint">Type your words, choose a placement, then let Peel &amp; Pop fit them safely.</p>
+        </div>
+        <div class="group">
           <p class="glabel"><i data-lucide="type"></i>Text</p>
           <div class="field"><label>Text (Enter = new line)</label><textarea id="tText" rows="2" spellcheck="false">Your text</textarea></div>
           <div class="field"><label>Font</label>
@@ -1757,6 +1772,7 @@ function tLoad(file){
     const c=document.createElement('canvas'); c.width=W; c.height=H; c.getContext('2d').drawImage(im,0,0,W,H);
     tImg={canvas:c,W,H,name:file.name.replace(/\.[^.]+$/,'')};
     $('tempty').style.display='none'; $('tDownload').disabled=false; $('tToContour').disabled=false;
+    $('tAutoLayout').disabled=false; $('tTryLayout').disabled=false;
     $('tmeta').textContent=`${W}×${H}px`;
     if(!tLayers.length) tAddLayer(); else tRender();
   };
@@ -1764,7 +1780,8 @@ function tLoad(file){
 }
 function tAddLayer(){
   const W=tImg?tImg.W:600, H=tImg?tImg.H:600;
-  tLayers.push({text:'Your text', x:W/2, y:H/2, size:Math.max(24,Math.round(Math.min(W,H)*0.13)),
+  const firstText=!tLayers.length && $('tText').value.trim() ? $('tText').value.trim() : 'Your text';
+  tLayers.push({text:firstText, x:W/2, y:H/2, size:Math.max(24,Math.round(Math.min(W,H)*0.13)),
     color:'#3a2140', font:tGetFont(), curve:0, rot:0, lineHeight:1.18, letter:0, strokeOn:false, strokeColor:'#ffffff', strokeW:6,
     follow:false, followPos:0, followInset:14, followFlip:false});
   tActive=tLayers.length-1; tSync(); tRefreshLayers(); tRender();
@@ -1827,6 +1844,7 @@ function tDrawLine(ctx, text, ly, oy){
 }
 function tRender(){ if(!tImg) return; tCanvas.width=tImg.W; tCanvas.height=tImg.H;
   tctx.clearRect(0,0,tImg.W,tImg.H); tctx.drawImage(tImg.canvas,0,0); tLayers.forEach(ly=>tDrawLayer(tctx,ly));
+  if(tDrag && (tSnapX||tSnapY)) tDrawSnapGuides();
   const a=tCur(); if(a && !a.follow) tDrawSelection(a); }
 function tCompose(){ const c=document.createElement('canvas'); c.width=tImg.W; c.height=tImg.H; const x=c.getContext('2d');
   x.drawImage(tImg.canvas,0,0); tLayers.forEach(ly=>tDrawLayer(x,ly)); return c; }
@@ -1836,6 +1854,100 @@ function tBBox(ly){ tctx.save(); tctx.font=`700 ${ly.size}px '${ly.font}', sans-
   const lh=ly.size*(ly.lineHeight!=null?ly.lineHeight:1.18); let bw=w, bh=lines.length*lh;
   if(ly.curve!==0 && w>0){ const angle=Math.abs(ly.curve)/100*Math.PI, R=w/angle; bh+=(R-R*Math.cos(angle/2)); bw=Math.max(bw, 2*R*Math.sin(angle/2)); }
   return { w:bw+ly.size*0.4, h:bh+ly.size*0.3 };
+}
+let tAutoVariant=0, tSnapX=false, tSnapY=false;
+function tDrawSnapGuides(){
+  tctx.save(); tctx.strokeStyle='rgba(255,111,181,.9)'; tctx.lineWidth=Math.max(1,tImg.W/800); tctx.setLineDash([10,7]);
+  if(tSnapX){ tctx.beginPath(); tctx.moveTo(tImg.W/2,0); tctx.lineTo(tImg.W/2,tImg.H); tctx.stroke(); }
+  if(tSnapY){ tctx.beginPath(); tctx.moveTo(0,tImg.H/2); tctx.lineTo(tImg.W,tImg.H/2); tctx.stroke(); }
+  tctx.restore();
+}
+function tClampLayer(ly, snap){
+  if(!tImg||!ly||ly.follow) return;
+  const bb=tBBox(ly), a=(ly.rot||0)*Math.PI/180, rw=Math.abs(bb.w*Math.cos(a))+Math.abs(bb.h*Math.sin(a)), rh=Math.abs(bb.w*Math.sin(a))+Math.abs(bb.h*Math.cos(a));
+  const pad=Math.max(8,Math.min(tImg.W,tImg.H)*.025), minX=pad+rw/2, maxX=tImg.W-pad-rw/2, minY=pad+rh/2, maxY=tImg.H-pad-rh/2;
+  ly.x=minX>maxX?tImg.W/2:Math.max(minX,Math.min(maxX,ly.x)); ly.y=minY>maxY?tImg.H/2:Math.max(minY,Math.min(maxY,ly.y));
+  tSnapX=tSnapY=false;
+  if(snap){ const sx=tImg.W*.018, sy=tImg.H*.018;
+    if(Math.abs(ly.x-tImg.W/2)<sx){ly.x=tImg.W/2;tSnapX=true;}
+    if(Math.abs(ly.y-tImg.H/2)<sy){ly.y=tImg.H/2;tSnapY=true;}
+  }
+}
+function tOpaqueBounds(){
+  if(!tImg) return null; if(tImg._bounds) return tImg._bounds;
+  const d=tImg.canvas.getContext('2d').getImageData(0,0,tImg.W,tImg.H).data;
+  let minX=tImg.W,minY=tImg.H,maxX=-1,maxY=-1;
+  for(let y=0;y<tImg.H;y++) for(let x=0;x<tImg.W;x++) if(d[(y*tImg.W+x)*4+3]>24){
+    if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+  }
+  tImg._bounds=maxX<0?{x:0,y:0,w:tImg.W,h:tImg.H}:{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
+  return tImg._bounds;
+}
+function tLineCandidates(text){
+  const manual=String(text||'').split('\n').map(s=>s.trim()).filter(Boolean), flat=manual.join(' ').replace(/\s+/g,' ').trim()||'Your text', words=flat.split(' '), out=[];
+  if(manual.length>1) out.push(manual);
+  function parts(start,left,lines){
+    if(left===1){ out.push(lines.concat(words.slice(start).join(' '))); return; }
+    for(let end=start+1;end<=words.length-left+1;end++) parts(end,left-1,lines.concat(words.slice(start,end).join(' ')));
+  }
+  for(let n=1;n<=Math.min(3,words.length);n++) parts(0,n,[]);
+  const seen=new Set(); return out.filter(lines=>{const k=lines.join('\n');if(seen.has(k))return false;seen.add(k);return true;});
+}
+function tFitText(ly,rect,variant){
+  const options=tLineCandidates($('tText').value||ly.text), lineHeight=1.12;
+  const ranked=options.map(lines=>{
+    tctx.save(); tctx.font=`700 100px '${ly.font}', sans-serif`;
+    let widest=0; lines.forEach(line=>{ const chars=[...line], w=chars.reduce((sum,ch)=>sum+tctx.measureText(ch).width,0); widest=Math.max(widest,w); }); tctx.restore();
+    const byW=rect.w*100/Math.max(1,widest+24), byH=rect.h/(lines.length*lineHeight+.3), size=Math.max(8,Math.min(400,byW,byH));
+    return {lines,size,score:size*(1-(lines.length-1)*.035)};
+  }).sort((a,b)=>b.score-a.score);
+  const pick=ranked[Math.min(variant,Math.min(3,ranked.length-1))]||ranked[0];
+  ly.text=pick.lines.join('\n'); ly.size=Math.max(8,Math.floor(pick.size)); ly.lineHeight=lineHeight; ly.letter=0; ly.rot=0;
+  ly.curve=pick.lines.length===1?[0,16,-16,0][variant%4]:0; ly.x=rect.x+rect.w/2; ly.y=rect.y+rect.h/2;
+}
+function tPlacementRect(place){
+  const b=tOpaqueBounds(), W=tImg.W,H=tImg.H,safe=Math.max(18,Math.min(W,H)*.045),gap=Math.max(12,Math.min(W,H)*.018),minH=H*.16;
+  let top={x:safe,y:safe,w:W-safe*2,h:Math.max(8,b.y-gap-safe)}, bottom={x:safe,y:b.y+b.h+gap,w:W-safe*2,h:Math.max(8,H-safe-(b.y+b.h+gap))};
+  if(top.h<minH) top={x:safe,y:safe,w:W-safe*2,h:H*.25};
+  if(bottom.h<minH) bottom={x:safe,y:H-safe-H*.25,w:W-safe*2,h:H*.25};
+  if(place==='best') place=bottom.h>=top.h?'bottom':'top';
+  if(place==='top') return top; if(place==='bottom') return bottom;
+  const insetX=Math.max(safe,b.w*.08);
+  const x=Math.max(safe,b.x+insetX), y=Math.max(safe,b.y+b.h*.34);
+  return {x,y,w:Math.max(W*.25,Math.min(W-safe,b.x+b.w-insetX)-x),h:Math.max(H*.12,Math.min(H*.3,b.h*.32))};
+}
+function tAutoOutline(ly,rect){
+  const hex=ly.color.replace('#',''),r=parseInt(hex.slice(0,2),16)||0,g=parseInt(hex.slice(2,4),16)||0,b=parseInt(hex.slice(4,6),16)||0;
+  const textLum=r*.299+g*.587+b*.114;
+  ly.strokeOn=true; ly.strokeColor=textLum<150?'#ffffff':'#3a2140'; ly.strokeW=Math.max(2,Math.min(24,Math.round(ly.size*.065)));
+}
+function tAutoAround(ly,variant){
+  const md=tMaskData(); if(!md||!md.dist) return false;
+  const b=tOpaqueBounds();
+  if(b.w>tImg.W*.96 && b.h>tImg.H*.96) return false;
+  let inset=Math.max(12,Math.round(Math.min(tImg.W,tImg.H)*.045)), railMask=maskFromDist(md.dist,tImg.W,tImg.H,inset);
+  let path=trace(railMask,tImg.W,tImg.H); if(path.length<=8) return false; path=resample(smooth(path,3),1);
+  const text=String($('tText').value||ly.text||'Your text').replace(/\s+/g,' ').trim();
+  tctx.save();tctx.font=`700 100px '${ly.font}', sans-serif`;const width=[...text].reduce((sum,ch)=>sum+tctx.measureText(ch).width,0);tctx.restore();
+  ly.size=Math.floor(Math.max(12,Math.min(Math.min(tImg.W,tImg.H)*.09,path.length*.62*100/Math.max(1,width))));
+  inset=Math.max(inset,Math.ceil(ly.size*.8));
+  railMask=maskFromDist(md.dist,tImg.W,tImg.H,inset); path=trace(railMask,tImg.W,tImg.H); if(path.length<=8) return false;
+  ly.text=text;ly.follow=true;ly.followInset=inset;ly.followPos=[0,25,50,75][variant%4];ly.followFlip=variant%4>=2;ly.curve=0;ly.rot=0;ly.letter=0;
+  ly.size=Math.floor(Math.max(12,Math.min(ly.size,path.length*.62*100/Math.max(1,width))));
+  tAutoOutline(ly,{x:0,y:0,w:tImg.W,h:tImg.H}); return true;
+}
+function tRunAutoLayout(tryAnother){
+  if(!tImg) return; if(tActive<0) tAddLayer(); const ly=tCur();
+  tAutoVariant=tryAnother?tAutoVariant+1:0; const place=$('tAutoPlace').value;
+  if(place==='around'){
+    ly.follow=false;
+    if(!tAutoAround(ly,tAutoVariant)){ $('tAutoHint').textContent='This image fills the whole canvas, so it has no clean sticker silhouette to follow. Try Best open space.'; tSync(); tRender(); return; }
+    $('tAutoHint').textContent='Fitted to the sticker outline. Try another changes the starting point.';
+  } else {
+    ly.follow=false; const rect=tPlacementRect(place); tFitText(ly,rect,tAutoVariant); tAutoOutline(ly,rect); tClampLayer(ly,false);
+    $('tAutoHint').textContent='Fitted safely with balanced lines and an automatic contrast outline.';
+  }
+  tSync(); tRefreshLayers(); tRender();
 }
 function tDrawSelection(ly){
   const bb=tBBox(ly), hw=bb.w/2, hh=bb.h/2, s=Math.max(1, tImg.W/520);
@@ -1910,6 +2022,9 @@ $('tFontSystem').addEventListener('click',async()=>{
 });
 $('tAddLayer').addEventListener('click',tAddLayer);
 $('tDelLayer').addEventListener('click',tDelLayer);
+$('tAutoLayout').addEventListener('click',()=>tRunAutoLayout(false));
+$('tTryLayout').addEventListener('click',()=>tRunAutoLayout(true));
+$('tAutoPlace').addEventListener('change',()=>{ tAutoVariant=0; if(tImg) tRunAutoLayout(false); });
 $('tLayerList').addEventListener('change',()=>{ tActive=+$('tLayerList').value; tSync(); tRender(); });
 $('tBrowse').addEventListener('click',()=>$('tfile').click());
 $('tfile').addEventListener('change',e=>{ if(e.target.files[0]) tLoad(e.target.files[0]); e.target.value=''; });
@@ -1935,13 +2050,14 @@ tCanvas.addEventListener('pointerdown',e=>{ if(!tImg||!tLayers.length) return; e
 });
 tCanvas.addEventListener('pointermove',e=>{ if(!tImg) return; const ly=tCur(); if(!ly) return; const p=tEvt(e);
   if(tResize){ const d=Math.hypot(p.x-ly.x,p.y-ly.y); let s=Math.round(tResize.s0*(d/tResize.d0));
-    s=Math.max(8,Math.min(400,s)); ly.size=s; $('tSize').value=s; $('tSizeNum').value=s; tRender(); return; }
+    s=Math.max(8,Math.min(400,s)); ly.size=s; tClampLayer(ly,false); $('tSize').value=s; $('tSizeNum').value=s; tRender(); return; }
   if(tRot){ let ang=Math.atan2(p.y-ly.y, p.x-ly.x)*180/Math.PI + 90; ang=((ang+180)%360+360)%360-180;
-    ly.rot=Math.round(ang); $('tRot').value=ly.rot; $('tRotNum').value=ly.rot; tRender(); return; }
-  if(tDrag){ ly.x=p.x-tDrag.ox; ly.y=p.y-tDrag.oy; tRender(); }
+    ly.rot=Math.round(ang); tClampLayer(ly,false); $('tRot').value=ly.rot; $('tRotNum').value=ly.rot; tRender(); return; }
+  if(tDrag){ ly.x=p.x-tDrag.ox; ly.y=p.y-tDrag.oy; tClampLayer(ly,true); tRender(); }
 });
-tCanvas.addEventListener('pointerup',()=>{ tDrag=null; tRot=null; tResize=null; });
-tCanvas.addEventListener('pointercancel',()=>{ tDrag=null; tRot=null; tResize=null; });
+function tInteractionEnd(){ tDrag=null; tRot=null; tResize=null; tSnapX=tSnapY=false; if(tImg)tRender(); }
+tCanvas.addEventListener('pointerup',tInteractionEnd);
+tCanvas.addEventListener('pointercancel',tInteractionEnd);
 tCanvas.addEventListener('dblclick',e=>{ if(!tImg||!tLayers.length) return;
   const p=tEvt(e); let best=-1,bd=Infinity; tLayers.forEach((ly,i)=>{ const d=(ly.x-p.x)**2+(ly.y-p.y)**2; if(d<bd){bd=d;best=i;} });
   if(best<0) return; tActive=best; tSync(); tRefreshLayers(); tOpenEditor(tLayers[best]);
@@ -1973,6 +2089,7 @@ function resetTextLayer(){
   Object.assign(ly,{x:W/2,y:H/2,size:Math.max(24,Math.round(Math.min(W,H)*0.13)),color:'#3a2140',font:'Fredoka',
     curve:0,rot:0,lineHeight:1.18,letter:0,strokeOn:false,strokeColor:'#ffffff',strokeW:6,
     follow:false,followPos:0,followInset:14,followFlip:false});
+  tAutoVariant=0; $('tAutoHint').textContent='Layer reset. Choose a placement and click Auto layout whenever you want me to fit it again.';
   tSync(); tRender();
 }
 function clearVibrancyAll(){
@@ -1987,6 +2104,8 @@ function clearTextAll(){
   if(!confirm('Clear the image and every text layer? This can’t be undone.')) return;
   tCloseEditor(); tImg=null; tLayers=[]; tActive=-1; tRefreshLayers();
   $('tempty').style.display='grid'; $('tDownload').disabled=true; $('tToContour').disabled=true; $('tmeta').textContent='no image loaded';
+  $('tAutoLayout').disabled=true; $('tTryLayout').disabled=true; tAutoVariant=0;
+  $('tAutoHint').textContent='Type your words, choose a placement, then let Peel & Pop fit them safely.';
   tCanvas.width=10; tCanvas.height=10; tctx.clearRect(0,0,10,10);
 }
 function activeStudio(){ const tab=document.querySelector('.tab.active'); return tab?tab.dataset.page:'contour'; }

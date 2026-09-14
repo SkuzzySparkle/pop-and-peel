@@ -559,7 +559,7 @@
           <p class="glabel"><i data-lucide="sparkles"></i>Smart layout</p>
           <div class="field"><label>Place text</label>
             <select id="tAutoPlace">
-              <option value="best">Best open space</option>
+              <option value="best">Sticker-style composition</option>
               <option value="bottom">Below the sticker</option>
               <option value="top">Above the sticker</option>
               <option value="center">Centered on the sticker</option>
@@ -603,7 +603,7 @@
         <div class="group">
           <p class="glabel"><i data-lucide="spline"></i>Follow outline</p>
           <div class="field"><label class="toggle"><input type="checkbox" id="tFollow"><span class="switch"></span><span class="t-label">Wrap text around the shape</span></label>
-            <p class="hint">Runs this layer along the image's silhouette, like a sticker rail.</p>
+            <p class="hint">Runs this layer along the image's silhouette. Drag it on the preview to slide it around the rail.</p>
           </div>
           <div class="field row"><label style="margin:0">Position</label><input type="range" id="tFollowPos" min="0" max="100" value="0" style="flex:1"><input type="number" class="numval" id="tFollowPosNum" min="0" max="100" step="1" value="0"></div>
           <div class="field row"><label style="margin:0">Distance</label><input type="range" id="tFollowInset" min="0" max="80" value="14" style="flex:1"><input type="number" class="numval" id="tFollowInsetNum" min="0" max="80" step="1" value="14"></div>
@@ -1845,7 +1845,7 @@ function tDrawLine(ctx, text, ly, oy){
 function tRender(){ if(!tImg) return; tCanvas.width=tImg.W; tCanvas.height=tImg.H;
   tctx.clearRect(0,0,tImg.W,tImg.H); tctx.drawImage(tImg.canvas,0,0); tLayers.forEach(ly=>tDrawLayer(tctx,ly));
   if(tDrag && (tSnapX||tSnapY)) tDrawSnapGuides();
-  const a=tCur(); if(a && !a.follow) tDrawSelection(a); }
+  const a=tCur(); if(a){ if(a.follow)tDrawFollowSelection(a); else tDrawSelection(a); } }
 function tCompose(){ const c=document.createElement('canvas'); c.width=tImg.W; c.height=tImg.H; const x=c.getContext('2d');
   x.drawImage(tImg.canvas,0,0); tLayers.forEach(ly=>tDrawLayer(x,ly)); return c; }
 function tBBox(ly){ tctx.save(); tctx.font=`700 ${ly.size}px '${ly.font}', sans-serif`;
@@ -1883,6 +1883,18 @@ function tOpaqueBounds(){
   tImg._bounds=maxX<0?{x:0,y:0,w:tImg.W,h:tImg.H}:{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
   return tImg._bounds;
 }
+function tEnsureCompositionSpace(){
+  if(!tImg||tImg._compositionPadded)return;
+  const b=tOpaqueBounds(), oldW=tImg.W,oldH=tImg.H, desired=Math.max(28,Math.round(Math.min(oldW,oldH)*.12));
+  tImg._sourceFullBleed=b.w>oldW*.96&&b.h>oldH*.96;
+  const left=Math.max(0,desired-b.x),top=Math.max(0,desired-b.y),right=Math.max(0,desired-(oldW-b.x-b.w)),bottom=Math.max(0,desired-(oldH-b.y-b.h));
+  if(left||top||right||bottom){
+    const c=document.createElement('canvas');c.width=oldW+left+right;c.height=oldH+top+bottom;c.getContext('2d').drawImage(tImg.canvas,left,top);
+    tImg.canvas=c;tImg.W=c.width;tImg.H=c.height;tLayers.forEach(ly=>{ly.x+=left;ly.y+=top;delete ly._followGeom;});
+    delete tImg._bounds;delete tImg._md;delete tImg._mdKey;$('tmeta').textContent=`${tImg.W}×${tImg.H}px`;
+  }
+  tImg._compositionPadded=true;
+}
 function tLineCandidates(text){
   const manual=String(text||'').split('\n').map(s=>s.trim()).filter(Boolean), flat=manual.join(' ').replace(/\s+/g,' ').trim()||'Your text', words=flat.split(' '), out=[];
   if(manual.length>1) out.push(manual);
@@ -1894,23 +1906,31 @@ function tLineCandidates(text){
   const seen=new Set(); return out.filter(lines=>{const k=lines.join('\n');if(seen.has(k))return false;seen.add(k);return true;});
 }
 function tFitText(ly,rect,variant){
-  const options=tLineCandidates($('tText').value||ly.text), lineHeight=1.12;
+  const options=tLineCandidates($('tText').value||ly.text), lineHeight=.96;
   const ranked=options.map(lines=>{
     tctx.save(); tctx.font=`700 100px '${ly.font}', sans-serif`;
     let widest=0; lines.forEach(line=>{ const chars=[...line], w=chars.reduce((sum,ch)=>sum+tctx.measureText(ch).width,0); widest=Math.max(widest,w); }); tctx.restore();
     const byW=rect.w*100/Math.max(1,widest+24), byH=rect.h/(lines.length*lineHeight+.3), size=Math.max(8,Math.min(400,byW,byH));
-    return {lines,size,score:size*(1-(lines.length-1)*.035)};
+    const balance=lines.length>1 ? Math.min(...lines.map(l=>l.length))/Math.max(...lines.map(l=>l.length)) : .72;
+    return {lines,size,score:size*(1+(lines.length>1?.1:0)+balance*.05)};
   }).sort((a,b)=>b.score-a.score);
   const pick=ranked[Math.min(variant,Math.min(3,ranked.length-1))]||ranked[0];
-  ly.text=pick.lines.join('\n'); ly.size=Math.max(8,Math.floor(pick.size)); ly.lineHeight=lineHeight; ly.letter=0; ly.rot=0;
-  ly.curve=pick.lines.length===1?[0,16,-16,0][variant%4]:0; ly.x=rect.x+rect.w/2; ly.y=rect.y+rect.h/2;
+  ly.text=pick.lines.join('\n'); ly.size=Math.max(8,Math.floor(pick.size)); ly.lineHeight=lineHeight; ly.letter=0;
+  ly.rot=[0,-2,2,0][variant%4]; ly.curve=pick.lines.length===1?[8,18,-14,0][variant%4]:[0,7,-7,3][variant%4];
+  ly.x=rect.x+rect.w/2; ly.y=rect.y+rect.h/2;
 }
 function tPlacementRect(place){
   const b=tOpaqueBounds(), W=tImg.W,H=tImg.H,safe=Math.max(18,Math.min(W,H)*.045),gap=Math.max(12,Math.min(W,H)*.018),minH=H*.16;
   let top={x:safe,y:safe,w:W-safe*2,h:Math.max(8,b.y-gap-safe)}, bottom={x:safe,y:b.y+b.h+gap,w:W-safe*2,h:Math.max(8,H-safe-(b.y+b.h+gap))};
   if(top.h<minH) top={x:safe,y:safe,w:W-safe*2,h:H*.25};
   if(bottom.h<minH) bottom={x:safe,y:H-safe-H*.25,w:W-safe*2,h:H*.25};
-  if(place==='best') place=bottom.h>=top.h?'bottom':'top';
+  if(place==='best'){
+    const full=b.w>W*.94&&b.h>H*.94, artX=Math.max(safe,b.x-b.w*.05), artR=Math.min(W-safe,b.x+b.w*1.05), artW=Math.max(W*.45,artR-artX);
+    if(full) return {x:safe+W*.07,y:H*.55,w:W-safe*2-W*.14,h:H*.34};
+    if(top.h>bottom.h*1.45){ const h=Math.max(H*.23,Math.min(H*.34,b.h*.34)); return {x:artX,y:Math.max(safe,b.y-h*.7),w:artW,h}; }
+    const h=Math.max(H*.23,Math.min(H*.36,b.h*.38)), y=Math.min(H-safe-h,b.y+b.h-h*.3);
+    return {x:artX,y,w:artW,h};
+  }
   if(place==='top') return top; if(place==='bottom') return bottom;
   const insetX=Math.max(safe,b.w*.08);
   const x=Math.max(safe,b.x+insetX), y=Math.max(safe,b.y+b.h*.34);
@@ -1924,7 +1944,7 @@ function tAutoOutline(ly,rect){
 function tAutoAround(ly,variant){
   const md=tMaskData(); if(!md||!md.dist) return false;
   const b=tOpaqueBounds();
-  if(b.w>tImg.W*.96 && b.h>tImg.H*.96) return false;
+  if(tImg._sourceFullBleed||(b.w>tImg.W*.96 && b.h>tImg.H*.96)) return false;
   let inset=Math.max(12,Math.round(Math.min(tImg.W,tImg.H)*.045)), railMask=maskFromDist(md.dist,tImg.W,tImg.H,inset);
   let path=trace(railMask,tImg.W,tImg.H); if(path.length<=8) return false; path=resample(smooth(path,3),1);
   const text=String($('tText').value||ly.text||'Your text').replace(/\s+/g,' ').trim();
@@ -1938,11 +1958,12 @@ function tAutoAround(ly,variant){
 }
 function tRunAutoLayout(tryAnother){
   if(!tImg) return; if(tActive<0) tAddLayer(); const ly=tCur();
+  tEnsureCompositionSpace();
   tAutoVariant=tryAnother?tAutoVariant+1:0; const place=$('tAutoPlace').value;
   if(place==='around'){
     ly.follow=false;
     if(!tAutoAround(ly,tAutoVariant)){ $('tAutoHint').textContent='This image fills the whole canvas, so it has no clean sticker silhouette to follow. Try Best open space.'; tSync(); tRender(); return; }
-    $('tAutoHint').textContent='Fitted to the sticker outline. Try another changes the starting point.';
+    $('tAutoHint').textContent='Fitted to the sticker outline. Drag the phrase on the preview to slide it around the shape.';
   } else {
     ly.follow=false; const rect=tPlacementRect(place); tFitText(ly,rect,tAutoVariant); tAutoOutline(ly,rect); tClampLayer(ly,false);
     $('tAutoHint').textContent='Fitted safely with balanced lines and an automatic contrast outline.';
@@ -1970,23 +1991,47 @@ function tMaskData(){ if(!tImg) return null; const key=tImg.W+'x'+tImg.H;
   for(let i=0;i<tImg.W*tImg.H;i++){ if(d[i*4+3]>128){mask[i]=1;any=true;} }
   tImg._md={mask, dist: any?chamferDT(mask,tImg.W,tImg.H):null}; tImg._mdKey=key; return tImg._md;
 }
+function tFollowGeometry(ly){
+  const md=tMaskData(); if(!md||!md.dist) return null;
+  const inset=ly.followInset!=null?ly.followInset:14, key=inset+'|'+tImg.W+'x'+tImg.H;
+  if(ly._followGeom&&ly._followGeom.key===key) return ly._followGeom;
+  const railMask=maskFromDist(md.dist,tImg.W,tImg.H,Math.max(.5,inset));
+  let path=trace(railMask,tImg.W,tImg.H); if(path.length<=8) return null;
+  path=smooth(path,3); const pts=resample(path,1);
+  ly._followGeom={key,pts,per:pts.length}; return ly._followGeom;
+}
 function tDrawFollow(ctx, ly){
-  const md=tMaskData(); if(!md||!md.dist) return;
-  const inset=ly.followInset!=null?ly.followInset:14;
-  const railMask=maskFromDist(md.dist, tImg.W, tImg.H, Math.max(0.5,inset));
-  let path=trace(railMask, tImg.W, tImg.H); if(path.length<=8) return;
-  path=smooth(path,3); const pts=resample(path,1), n=pts.length, per=n;
+  const geom=tFollowGeometry(ly); if(!geom) return; const {pts,per}=geom, n=pts.length;
   ctx.save(); ctx.font=`700 ${ly.size}px '${ly.font}', sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineJoin='round';
   const chars=[...((ly.text||'').replace(/\n/g,' '))]; if(!chars.length){ ctx.restore(); return; }
   const adv=c=>ctx.measureText(c).width;
-  let pos=(ly.followPos||0)/100*per;
+  const total=chars.reduce((sum,ch)=>sum+adv(ch),0); ly._followTextWidth=total;
+  let pos=(ly.followPos||0)/100*per, dir=ly.followFlip?-1:1;
   const pointAt=d=>{ let dd=((d%per)+per)%per; return Math.min(n-1,Math.max(0,Math.round(dd))); };
-  for(const ch of chars){ const w=adv(ch), c=pos+w/2, i=pointAt(c);
+  ly._followCenter=pts[pointAt(pos+dir*total/2)];
+  for(const ch of chars){ const w=adv(ch), c=pos+dir*w/2, i=pointAt(c);
     const p0=pts[(i-1+n)%n], p1=pts[(i+1)%n]; let ang=Math.atan2(p1[1]-p0[1], p1[0]-p0[0]); if(ly.followFlip) ang+=Math.PI;
     const p=pts[i]; ctx.save(); ctx.translate(p[0],p[1]); ctx.rotate(ang);
     if(ly.strokeOn&&ly.strokeW>0 && ch!==' '){ ctx.lineWidth=ly.strokeW*2; ctx.strokeStyle=ly.strokeColor; ctx.strokeText(ch,0,0); }
-    ctx.fillStyle=ly.color; if(ch!==' ') ctx.fillText(ch,0,0); ctx.restore(); pos+=w; }
+    ctx.fillStyle=ly.color; if(ch!==' ') ctx.fillText(ch,0,0); ctx.restore(); pos+=dir*w; }
   ctx.restore();
+}
+function tDrawFollowSelection(ly){
+  const g=tFollowGeometry(ly), p=ly._followCenter; if(!g||!p)return;
+  const s=Math.max(1,tImg.W/520), r=10*s;
+  tctx.save();tctx.strokeStyle='rgba(255,111,181,.72)';tctx.lineWidth=1.5*s;tctx.setLineDash([5*s,5*s]);
+  tctx.beginPath(); for(let i=0;i<g.pts.length;i+=Math.max(1,Math.floor(g.pts.length/500))){const q=g.pts[i];if(i===0)tctx.moveTo(q[0],q[1]);else tctx.lineTo(q[0],q[1]);} tctx.closePath();tctx.stroke();tctx.setLineDash([]);
+  tctx.beginPath();tctx.arc(p[0],p[1],r,0,Math.PI*2);tctx.fillStyle='#fff';tctx.fill();tctx.strokeStyle='#FF6FB5';tctx.lineWidth=2*s;tctx.stroke();tctx.restore();
+}
+function tMoveFollowTo(ly,p){
+  const g=tFollowGeometry(ly); if(!g)return; let best=0,bd=Infinity;
+  for(let i=0;i<g.pts.length;i++){const q=g.pts[i],dx=q[0]-p.x,dy=q[1]-p.y,d=dx*dx+dy*dy;if(d<bd){bd=d;best=i;}}
+  tctx.save();tctx.font=`700 ${ly.size}px '${ly.font}', sans-serif`;
+  const total=ly._followTextWidth||[...((ly.text||'').replace(/\n/g,' '))].reduce((sum,ch)=>sum+tctx.measureText(ch).width,0);tctx.restore();
+  const p0=g.pts[(best-1+g.pts.length)%g.pts.length],p1=g.pts[(best+1)%g.pts.length],ang=Math.atan2(p1[1]-p0[1],p1[0]-p0[0]);
+  ly.followFlip=Math.cos(ang)<0;
+  ly.followPos=(((best+(ly.followFlip?total/2:-total/2))/g.per*100)%100+100)%100;
+  $('tFollowPos').value=ly.followPos;$('tFollowPosNum').value=Math.round(ly.followPos);$('tFollowFlip').checked=ly.followFlip;tRender();
 }
 
 $('tText').addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly.text=$('tText').value; tRefreshLayers(); tRender(); });
@@ -2036,6 +2081,7 @@ tdz.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) tLoad(e.dataTransfe
 function tEvt(e){ const r=tCanvas.getBoundingClientRect(); return {x:(e.clientX-r.left)*(tImg.W/r.width), y:(e.clientY-r.top)*(tImg.H/r.height)}; }
 tCanvas.addEventListener('pointerdown',e=>{ if(!tImg||!tLayers.length) return; e.preventDefault();
   const p=tEvt(e), act=tCur(), hr=Math.max(14,tImg.W*0.03);
+  if(act&&act.follow){ tDrag={follow:true};tMoveFollowTo(act,p);try{tCanvas.setPointerCapture(e.pointerId);}catch(_){};return; }
   if(act && !act.follow){
     if(act._corners){ for(const c of act._corners){ const dx=p.x-c.x, dy=p.y-c.y; if(dx*dx+dy*dy<hr*hr){
       tResize={d0:Math.max(1,Math.hypot(p.x-act.x,p.y-act.y)), s0:act.size}; try{tCanvas.setPointerCapture(e.pointerId);}catch(_){}; return; } } }
@@ -2053,6 +2099,7 @@ tCanvas.addEventListener('pointermove',e=>{ if(!tImg) return; const ly=tCur(); i
     s=Math.max(8,Math.min(400,s)); ly.size=s; tClampLayer(ly,false); $('tSize').value=s; $('tSizeNum').value=s; tRender(); return; }
   if(tRot){ let ang=Math.atan2(p.y-ly.y, p.x-ly.x)*180/Math.PI + 90; ang=((ang+180)%360+360)%360-180;
     ly.rot=Math.round(ang); tClampLayer(ly,false); $('tRot').value=ly.rot; $('tRotNum').value=ly.rot; tRender(); return; }
+  if(tDrag&&tDrag.follow){tMoveFollowTo(ly,p);return;}
   if(tDrag){ ly.x=p.x-tDrag.ox; ly.y=p.y-tDrag.oy; tClampLayer(ly,true); tRender(); }
 });
 function tInteractionEnd(){ tDrag=null; tRot=null; tResize=null; tSnapX=tSnapY=false; if(tImg)tRender(); }

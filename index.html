@@ -327,7 +327,18 @@
         <div class="field row"><label style="margin:0">Text color</label><span class="spacer"></span><input type="text" class="hex" id="textColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="textColor" value="#3a2140"></div>
         <div class="field"><label class="toggle"><input type="checkbox" id="repeat"><span class="switch"></span><span class="t-label">Repeat around whole rail</span></label></div>
         <div class="field"><label class="toggle"><input type="checkbox" id="flipText"><span class="switch"></span><span class="t-label">Text on outer side</span></label></div>
-        <div class="field"><label class="toggle"><input type="checkbox" id="flipDir"><span class="switch"></span><span class="t-label">Flip text so it reads ↕</span></label></div>
+        <div class="field"><label class="toggle"><input type="checkbox" id="flipDir"><span class="switch"></span><span class="t-label">Reverse reading direction</span></label></div>
+      </div>
+      <div class="group">
+        <p class="glabel"><i data-lucide="plus"></i>Welded add-on</p>
+        <div class="field"><label>Text to weld</label><input type="text" id="weldText" value="" placeholder="Add a name, word, or symbol"></div>
+        <div class="two">
+          <button class="btn secondary" id="weldAddText" disabled>＋ Add text</button>
+          <button class="btn secondary" id="weldAddLogo" disabled>Upload logo</button>
+        </div>
+        <div class="field row"><label style="margin:0">Selected size</label><input type="range" id="weldScale" min="25" max="300" value="100" style="flex:1" disabled><input type="number" class="numval" id="weldScaleNum" min="25" max="300" step="1" value="100" disabled></div>
+        <button class="btn secondary" id="weldDelete" disabled>Delete selected add-on</button>
+        <p class="hint" id="weldHint">Add text or a transparent logo, then drag it on the preview. Keep it touching the artwork and the cut contour welds around both.</p>
       </div>
     </div>
 
@@ -703,6 +714,7 @@
 <input type="file" id="file" accept="image/png,image/*" multiple>
 <input type="file" id="vfile" accept="image/png,image/*" multiple>
 <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/*">
+<input type="file" id="weldLogoFile" accept="image/png,image/webp,image/*">
 <input type="file" id="wmLogoFile" accept="image/png,image/*">
 <input type="file" id="tfile" accept="image/png,image/*">
 <input type="file" id="tFontFile" accept=".ttf,.otf,.woff,.woff2,font/*">
@@ -784,7 +796,7 @@ function loadFiles(fileList){
       const W=Math.max(1,Math.round(w*s)), H=Math.max(1,Math.round(h*s));
       const c=document.createElement('canvas'); c.width=W; c.height=H;
       c.getContext('2d').drawImage(im,0,0,W,H);
-      images.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, tw:W, th:H, W, H, pad:0, artX:0, artY:0,
+      images.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, tw:W, th:H, W, H, pad:0, artX:0, artY:0, addons:[], addonActive:-1,
         extraTop:0, extraRight:0, extraBottom:0, extraLeft:0, canvasHistory:[],
         work:c, mask:null, dist:null, cacheKey:'', pos:null});
       if(active<0) active=0;
@@ -803,15 +815,39 @@ function computePad(im, st){
   if(st.flipText) p += st.inset + st.fontSize*1.4;
   return Math.max(0, Math.ceil(p));
 }
+function weldAddonBox(addon){
+  const scale=Math.max(.25,Math.min(3,addon.scale||1));
+  if(addon.kind==='logo'){
+    const w=Math.max(12,(addon.baseW||100)*scale), h=Math.max(12,(addon.baseH||100)*scale);
+    return {x:addon.x-w/2,y:addon.y-h/2,w,h};
+  }
+  const size=Math.max(10,(addon.size||42)*scale), c=document.createElement('canvas').getContext('2d');
+  c.font=`700 ${size}px '${addon.font||'Fredoka'}', sans-serif`;
+  const m=c.measureText(addon.text||'Text'), w=Math.max(size*.7,m.width+size*.35), h=size*1.35;
+  return {x:addon.x-w/2,y:addon.y-h/2,w,h,size};
+}
+function drawWeldAddon(ctx,addon,artX,artY){
+  const b=weldAddonBox(addon), x=artX+b.x, y=artY+b.y;
+  if(addon.kind==='logo')ctx.drawImage(addon.canvas,x,y,b.w,b.h);
+  else{
+    ctx.save();ctx.font=`700 ${b.size}px '${addon.font||'Fredoka'}', sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+    ctx.lineWidth=Math.max(2,b.size*.12);ctx.strokeStyle=addon.strokeColor||'#ffffff';ctx.strokeText(addon.text||'Text',artX+addon.x,artY+addon.y);
+    ctx.fillStyle=addon.color||'#3a2140';ctx.fillText(addon.text||'Text',artX+addon.x,artY+addon.y);ctx.restore();
+  }
+  addon._stage={x,y,w:b.w,h:b.h,cx:artX+addon.x,cy:artY+addon.y};
+}
 function buildMasks(im, st){
   const pad=computePad(im, st);
   const top=im.extraTop||0, right=im.extraRight||0, bottom=im.extraBottom||0, left=im.extraLeft||0;
-  const key=[st.thresh,pad,top,right,bottom,left].join('|');
+  const addons=im.addons||[], addonKey=addons.map(a=>[a.id,a.kind,a.x,a.y,a.scale,a.text,a.font,a.color,a.baseW,a.baseH].join(',')).join(';');
+  const key=[st.thresh,pad,top,right,bottom,left,addonKey].join('|');
   if(im.dist && im.cacheKey===key) return;
-  const tw=im.tw, th=im.th, W=tw+2*pad+left+right, H=th+2*pad+top+bottom;
-  const artX=pad+left, artY=pad+top;
+  const tw=im.tw, th=im.th;let minX=0,minY=0,maxX=tw,maxY=th;
+  addons.forEach(a=>{const b=weldAddonBox(a);minX=Math.min(minX,b.x);minY=Math.min(minY,b.y);maxX=Math.max(maxX,b.x+b.w);maxY=Math.max(maxY,b.y+b.h);});
+  const W=Math.ceil(maxX-minX)+2*pad+left+right, H=Math.ceil(maxY-minY)+2*pad+top+bottom;
+  const artX=pad+left-minX, artY=pad+top-minY;
   const work=document.createElement('canvas'); work.width=W; work.height=H;
-  const wctx=work.getContext('2d'); wctx.drawImage(im.tight, artX, artY);
+  const wctx=work.getContext('2d'); wctx.drawImage(im.tight, artX, artY);addons.forEach(a=>drawWeldAddon(wctx,a,artX,artY));
   im.work=work; im.W=W; im.H=H; im.pad=pad; im.artX=artX; im.artY=artY;
   const data=wctx.getImageData(0,0,W,H).data;
   // Keep fully opaque artwork selectable even at 100% edge cleanup.
@@ -1080,13 +1116,15 @@ function drawGlyphs(ctx, pts, per, st, startFrac, g){
   ctx.save();
   ctx.font=`700 ${st.fontSize}px '${st.font}', sans-serif`;
   ctx.fillStyle=st.textColor; ctx.textAlign='center'; ctx.textBaseline='middle';
-  const seq=st.flipDir? g.glyphs.slice().reverse() : g.glyphs;
   let pos=startFrac*per;
+  const mid=pointAt(pos+g.totalW/2),mp0=pts[(mid-1+n)%n],mp1=pts[(mid+1)%n];
+  const autoReverse=Math.cos(Math.atan2(mp1[1]-mp0[1],mp1[0]-mp0[0]))<0;
+  const reverse=autoReverse!==!!st.flipDir, seq=reverse?g.glyphs.slice().reverse():g.glyphs;
   for(const ch of seq){
     const w=g.adv(ch), c=pos+w/2, i=pointAt(c);
     const pPrev=pts[(i-1+n)%n], pNext=pts[(i+1)%n];
     let ang=Math.atan2(pNext[1]-pPrev[1], pNext[0]-pPrev[0]);
-    if(st.flipDir) ang+=Math.PI;
+    if(reverse) ang+=Math.PI;
     const p=pts[i];
     ctx.save(); ctx.translate(p[0],p[1]); ctx.rotate(ang); if(ch!==' ') ctx.fillText(ch,0,0); ctx.restore();
     pos+=w; if(!st.repeat && pos>per+ w) break;
@@ -1107,6 +1145,7 @@ let raf=null;
 function scheduleRender(){ if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(render); }
 function render(){
   updateContourSpaceButtons();
+  updateWeldControls();
   if(active<0 || !images[active]){ return; }
   const im=images[active], st=readState();
   const {art, rail, empty}=composeArt(im, st);
@@ -1117,6 +1156,7 @@ function render(){
   if(st.flip){ sctx.translate(im.W,0); sctx.scale(-1,1); }
   sctx.drawImage(art,0,0);
   sctx.restore();
+  drawWeldSelection(im,st);
   im._art=art; // cache for export
   $('meta').textContent = empty
     ? 'no visible pixels — is this PNG empty?'
@@ -1189,6 +1229,33 @@ function removeImage(idx){
   renderThumbs(); render();
 }
 
+// ---------- welded text / logo add-ons ----------
+function selectedWeld(){const im=active>=0?images[active]:null;return im&&im.addonActive>=0?(im.addons||[])[im.addonActive]:null;}
+function updateWeldControls(){
+  const im=active>=0?images[active]:null,a=selectedWeld(),has=!!im;
+  $('weldAddText').disabled=!has;$('weldAddLogo').disabled=!has;$('weldDelete').disabled=!a;
+  $('weldScale').disabled=!a;$('weldScaleNum').disabled=!a;
+  if(a){const value=Math.round((a.scale||1)*100);$('weldScale').value=value;$('weldScaleNum').value=value;$('weldHint').textContent='Selected add-on: drag it on the preview. Keep it touching the artwork so the contour welds around both.';}
+  else $('weldHint').textContent=has?'Add text or a transparent logo, then drag it on the preview. Keep it touching the artwork and the cut contour welds around both.':'Load a sticker first, then add text or a logo.';
+}
+function addWeldAddon(addon){
+  if(active<0||!images[active])return;const im=images[active];im.addons=im.addons||[];
+  addon.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);addon.scale=1;addon.x=im.tw/2;
+  const b=weldAddonBox(addon);addon.y=im.th+b.h*.22;im.addons.push(addon);im.addonActive=im.addons.length-1;
+  invalidateContourCanvas(im);render();
+}
+function drawWeldSelection(im,st){
+  const a=selectedWeld();if(!a||!a._stage)return;let {x,y,w,h}=a._stage;
+  sctx.save();if(st.flip)x=im.W-x-w;sctx.strokeStyle='#FF6FB5';sctx.lineWidth=Math.max(2,im.W/700);sctx.setLineDash([8,6]);sctx.strokeRect(x,y,w,h);sctx.restore();
+}
+$('weldAddText').addEventListener('click',()=>{const value=$('weldText').value.trim();if(!value){$('weldText').focus();return;}addWeldAddon({kind:'text',text:value,size:Math.max(30,Math.min(90,images[active].tw*.075)),font:getFontFamily(),color:$('textColor').value,strokeColor:'#ffffff'});});
+$('weldAddLogo').addEventListener('click',()=>$('weldLogoFile').click());
+$('weldLogoFile').addEventListener('change',e=>{const file=e.target.files[0],target=active>=0?images[active]:null;if(!file||!target)return;const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(url);const idx=images.indexOf(target);if(idx<0)return;active=idx;const max=Math.max(80,Math.min(260,target.tw*.3)),s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),w=Math.max(12,Math.round(img.naturalWidth*s)),h=Math.max(12,Math.round(img.naturalHeight*s)),c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);addWeldAddon({kind:'logo',canvas:c,baseW:w,baseH:h,name:file.name});renderThumbs();};img.src=url;e.target.value='';});
+function setWeldScale(value){const a=selectedWeld();if(!a)return;const v=Math.max(25,Math.min(300,Math.round(+value||100)));a.scale=v/100;$('weldScale').value=v;$('weldScaleNum').value=v;invalidateContourCanvas(images[active]);scheduleRender();}
+$('weldScale').addEventListener('input',()=>setWeldScale($('weldScale').value));
+$('weldScaleNum').addEventListener('input',()=>setWeldScale($('weldScaleNum').value));
+$('weldDelete').addEventListener('click',()=>{if(active<0)return;const im=images[active];if(im.addonActive<0)return;im.addons.splice(im.addonActive,1);im.addonActive=Math.min(im.addonActive,im.addons.length-1);invalidateContourCanvas(im);render();});
+
 // ---------- drag text ----------
 function placeTextAt(clientX, clientY){
   if(!activeRail || active<0) return;
@@ -1202,11 +1269,18 @@ function placeTextAt(clientX, clientY){
   let frac=(best-activeRail.textHalf)/activeRail.per; frac=((frac%1)+1)%1;
   im.pos=frac; scheduleRender();
 }
-let dragging=false;
-stage.addEventListener('pointerdown',e=>{ if(active<0)return; dragging=true; try{stage.setPointerCapture(e.pointerId);}catch(_){}; placeTextAt(e.clientX,e.clientY); });
-stage.addEventListener('pointermove',e=>{ if(dragging) placeTextAt(e.clientX,e.clientY); });
-stage.addEventListener('pointerup',()=>{ dragging=false; });
-stage.addEventListener('pointercancel',()=>{ dragging=false; });
+function contourPoint(e){const im=images[active],st=readState(),r=stage.getBoundingClientRect();let x=(e.clientX-r.left)*(im.W/r.width);if(st.flip)x=im.W-x;return{x,y:(e.clientY-r.top)*(im.H/r.height)};}
+let dragging=false,weldDrag=null;
+stage.addEventListener('pointerdown',e=>{ if(active<0)return;const im=images[active],p=contourPoint(e),addons=im.addons||[];let hit=-1;
+  for(let i=addons.length-1;i>=0;i--){const b=addons[i]._stage;if(b&&p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){hit=i;break;}}
+  try{stage.setPointerCapture(e.pointerId);}catch(_){}
+  if(hit>=0){im.addonActive=hit;const a=addons[hit];weldDrag={dx:p.x-a._stage.cx,dy:p.y-a._stage.cy};updateWeldControls();render();return;}
+  dragging=true;placeTextAt(e.clientX,e.clientY);
+});
+stage.addEventListener('pointermove',e=>{if(weldDrag&&active>=0){const im=images[active],a=selectedWeld(),p=contourPoint(e);if(!a)return;a.x=p.x-im.artX-weldDrag.dx;a.y=p.y-im.artY-weldDrag.dy;invalidateContourCanvas(im);scheduleRender();}else if(dragging)placeTextAt(e.clientX,e.clientY);});
+function endContourDrag(){dragging=false;weldDrag=null;}
+stage.addEventListener('pointerup',endContourDrag);
+stage.addEventListener('pointercancel',endContourDrag);
 
 // ---------- export ----------
 function exportCanvas(im, st){

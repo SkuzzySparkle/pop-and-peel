@@ -606,6 +606,15 @@
           <div class="field row"><label style="margin:0">Line spacing</label><input type="range" id="tLine" min="0.7" max="2.5" step="0.05" value="1.18" style="flex:1"><input type="number" class="numval" id="tLineNum" min="0.7" max="2.5" step="0.05" value="1.18"></div>
           <div class="field row"><label style="margin:0">Letter spacing</label><input type="range" id="tLetter" min="-10" max="40" value="0" style="flex:1"><input type="number" class="numval" id="tLetterNum" min="-10" max="40" step="1" value="0"></div>
           <div class="field row"><label style="margin:0">Color</label><span class="spacer"></span><input type="text" class="hex" id="tColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="tColor" value="#3a2140"></div>
+          <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+            <p class="glabel"><i data-lucide="layers"></i>Text layers</p>
+            <div class="two">
+              <button class="btn secondary" id="tAddLayer">+ Add text</button>
+              <button class="btn secondary" id="tDelLayer">Delete</button>
+            </div>
+            <div class="field" style="margin-top:8px"><select id="tLayerList"></select></div>
+            <p class="hint">Choose a text layer to edit it, or drag it directly on the image.</p>
+          </div>
         </div>
         <div class="group">
           <p class="glabel"><i data-lucide="expand"></i>Canvas space</p>
@@ -638,15 +647,6 @@
           <div class="field row"><label style="margin:0">Position</label><input type="range" id="tFollowPos" min="0" max="100" value="0" style="flex:1"><input type="number" class="numval" id="tFollowPosNum" min="0" max="100" step="1" value="0"></div>
           <div class="field row"><label style="margin:0">Distance</label><input type="range" id="tFollowInset" min="0" max="80" value="14" style="flex:1"><input type="number" class="numval" id="tFollowInsetNum" min="0" max="80" step="1" value="14"></div>
           <div class="field"><label class="toggle"><input type="checkbox" id="tFollowFlip"><span class="switch"></span><span class="t-label">Flip reading direction</span></label></div>
-        </div>
-        <div class="group">
-          <p class="glabel"><i data-lucide="layers"></i>Layers</p>
-          <div class="two">
-            <button class="btn secondary" id="tAddLayer">+ Add text</button>
-            <button class="btn secondary" id="tDelLayer">Delete</button>
-          </div>
-          <div class="field" style="margin-top:8px"><select id="tLayerList"></select></div>
-          <p class="hint">Drag text on the image to move it. Select a layer here to edit it.</p>
         </div>
       </div>
       <div class="rightcol">

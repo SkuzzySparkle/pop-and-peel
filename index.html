@@ -586,21 +586,6 @@
           <p class="hint" id="tAutoHint">Type your words, choose a placement, then let Peel &amp; Pop fit them safely.</p>
         </div>
         <div class="group">
-          <p class="glabel"><i data-lucide="expand"></i>Canvas space</p>
-          <div class="field row"><label style="margin:0">Add</label><input type="range" id="tSpaceAmount" min="20" max="1000" step="10" value="200" style="flex:1"><input type="number" class="numval" id="tSpaceAmountNum" min="20" max="1000" step="10" value="200"></div>
-          <div class="two">
-            <button class="btn secondary t-space-btn" id="tSpaceTop" disabled>＋ Top</button>
-            <button class="btn secondary t-space-btn" id="tSpaceBottom" disabled>＋ Bottom</button>
-          </div>
-          <div class="two" style="margin-top:8px">
-            <button class="btn secondary t-space-btn" id="tSpaceLeft" disabled>＋ Left</button>
-            <button class="btn secondary t-space-btn" id="tSpaceRight" disabled>＋ Right</button>
-          </div>
-          <button class="btn secondary t-space-btn" id="tSpaceAll" disabled style="margin-top:8px">＋ All sides</button>
-          <button class="btn secondary t-space-undo" id="tSpaceUndo" disabled style="margin-top:8px">Undo canvas change</button>
-          <p class="hint">Adds transparent room for text without stretching your artwork. Saved PNGs include the extra space.</p>
-        </div>
-        <div class="group">
           <p class="glabel"><i data-lucide="type"></i>Text</p>
           <div class="field"><label>Text (Enter = new line)</label><textarea id="tText" rows="2" spellcheck="false">Your text</textarea></div>
           <div class="field"><label>Font</label>
@@ -621,6 +606,21 @@
           <div class="field row"><label style="margin:0">Line spacing</label><input type="range" id="tLine" min="0.7" max="2.5" step="0.05" value="1.18" style="flex:1"><input type="number" class="numval" id="tLineNum" min="0.7" max="2.5" step="0.05" value="1.18"></div>
           <div class="field row"><label style="margin:0">Letter spacing</label><input type="range" id="tLetter" min="-10" max="40" value="0" style="flex:1"><input type="number" class="numval" id="tLetterNum" min="-10" max="40" step="1" value="0"></div>
           <div class="field row"><label style="margin:0">Color</label><span class="spacer"></span><input type="text" class="hex" id="tColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="tColor" value="#3a2140"></div>
+        </div>
+        <div class="group">
+          <p class="glabel"><i data-lucide="expand"></i>Canvas space</p>
+          <div class="field row"><label style="margin:0">Add</label><input type="range" id="tSpaceAmount" min="20" max="1000" step="10" value="200" style="flex:1"><input type="number" class="numval" id="tSpaceAmountNum" min="20" max="1000" step="10" value="200"></div>
+          <div class="two">
+            <button class="btn secondary t-space-btn" id="tSpaceTop" disabled>＋ Top</button>
+            <button class="btn secondary t-space-btn" id="tSpaceBottom" disabled>＋ Bottom</button>
+          </div>
+          <div class="two" style="margin-top:8px">
+            <button class="btn secondary t-space-btn" id="tSpaceLeft" disabled>＋ Left</button>
+            <button class="btn secondary t-space-btn" id="tSpaceRight" disabled>＋ Right</button>
+          </div>
+          <button class="btn secondary t-space-btn" id="tSpaceAll" disabled style="margin-top:8px">＋ All sides</button>
+          <button class="btn secondary t-space-undo" id="tSpaceUndo" disabled style="margin-top:8px">Undo canvas change</button>
+          <p class="hint">Adds transparent room for text without stretching your artwork. Saved PNGs include the extra space.</p>
         </div>
         <div class="group">
           <p class="glabel"><i data-lucide="palette"></i>Style</p>
@@ -663,16 +663,6 @@
             <span class="meta" id="tmeta">no image loaded</span>
             <span class="spacer"></span>
             <div class="mini"><button class="btn secondary" id="tBrowse">Choose file</button></div>
-          </div>
-          <div class="stage-foot" style="padding-top:0;gap:6px;flex-wrap:wrap">
-            <span class="meta" id="tQuickSpaceLabel">Add 200px canvas:</span>
-            <div class="mini" style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn secondary t-space-btn" id="tQuickTop" disabled style="padding:7px 10px">＋ Top</button>
-              <button class="btn secondary t-space-btn" id="tQuickBottom" disabled style="padding:7px 10px">＋ Bottom</button>
-              <button class="btn secondary t-space-btn" id="tQuickLeft" disabled style="padding:7px 10px">＋ Left</button>
-              <button class="btn secondary t-space-btn" id="tQuickRight" disabled style="padding:7px 10px">＋ Right</button>
-              <button class="btn secondary t-space-undo" id="tQuickUndo" disabled style="padding:7px 10px">Undo</button>
-            </div>
           </div>
         </div>
         <div class="panel bottom">
@@ -2214,20 +2204,14 @@ $('tAutoLayout').addEventListener('click',()=>tRunAutoLayout(false));
 $('tTryLayout').addEventListener('click',()=>tRunAutoLayout(true));
 $('tAutoPlace').addEventListener('change',()=>{ tAutoVariant=0; if(tImg) tRunAutoLayout(false); });
 function tSpaceValue(){return Math.max(20,Math.min(1000,parseInt($('tSpaceAmountNum').value,10)||200));}
-function tShowSpaceValue(v){$('tQuickSpaceLabel').textContent=`Add ${v}px canvas:`;}
-$('tSpaceAmount').addEventListener('input',()=>{const v=+$('tSpaceAmount').value;$('tSpaceAmountNum').value=v;tShowSpaceValue(v);});
-$('tSpaceAmountNum').addEventListener('input',()=>{const v=tSpaceValue();$('tSpaceAmount').value=v;tShowSpaceValue(v);});
+$('tSpaceAmount').addEventListener('input',()=>{$('tSpaceAmountNum').value=+$('tSpaceAmount').value;});
+$('tSpaceAmountNum').addEventListener('input',()=>{$('tSpaceAmount').value=tSpaceValue();});
 $('tSpaceTop').addEventListener('click',()=>tExpandCanvas(tSpaceValue(),0,0,0));
 $('tSpaceBottom').addEventListener('click',()=>tExpandCanvas(0,0,tSpaceValue(),0));
 $('tSpaceLeft').addEventListener('click',()=>tExpandCanvas(0,0,0,tSpaceValue()));
 $('tSpaceRight').addEventListener('click',()=>tExpandCanvas(0,tSpaceValue(),0,0));
 $('tSpaceAll').addEventListener('click',()=>{const v=tSpaceValue();tExpandCanvas(v,v,v,v);});
 $('tSpaceUndo').addEventListener('click',tUndoCanvasExpansion);
-$('tQuickTop').addEventListener('click',()=>tExpandCanvas(tSpaceValue(),0,0,0));
-$('tQuickBottom').addEventListener('click',()=>tExpandCanvas(0,0,tSpaceValue(),0));
-$('tQuickLeft').addEventListener('click',()=>tExpandCanvas(0,0,0,tSpaceValue()));
-$('tQuickRight').addEventListener('click',()=>tExpandCanvas(0,tSpaceValue(),0,0));
-$('tQuickUndo').addEventListener('click',tUndoCanvasExpansion);
 $('tLayerList').addEventListener('change',()=>{ tActive=+$('tLayerList').value; tSync(); tRender(); });
 $('tBrowse').addEventListener('click',()=>$('tfile').click());
 $('tfile').addEventListener('change',e=>{ if(e.target.files[0]) tLoad(e.target.files[0]); e.target.value=''; });

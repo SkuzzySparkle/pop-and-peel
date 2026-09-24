@@ -121,6 +121,14 @@
   .color{width:38px;height:34px;padding:0;border:1.5px solid var(--line);border-radius:10px;background:none;cursor:pointer;}
   .color::-webkit-color-swatch-wrapper{padding:3px;}
   .color::-webkit-color-swatch{border:none;border-radius:6px;}
+  .saved-colors{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;min-height:30px;align-items:center;}
+  .saved-color-chip{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:999px;background:var(--input);overflow:hidden;}
+  .saved-color-use,.saved-color-remove{border:0;background:transparent;color:var(--ink);cursor:pointer;font-family:'Nunito';font-weight:800;}
+  .saved-color-use{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 7px;font-size:11px;}
+  .saved-color-use:hover{background:var(--lilac);}
+  .saved-color-dot{width:17px;height:17px;border-radius:50%;border:1px solid rgba(0,0,0,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35);}
+  .saved-color-remove{padding:5px 8px 6px 5px;color:var(--muted);font-size:15px;line-height:1;}
+  .saved-color-remove:hover{color:var(--pink-deep);}
 
   .toggle{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;}
   .field label.toggle{display:flex;align-items:center;gap:9px;margin-bottom:0;cursor:pointer;}
@@ -606,6 +614,10 @@
           <div class="field row"><label style="margin:0">Line spacing</label><input type="range" id="tLine" min="0.7" max="2.5" step="0.05" value="1.18" style="flex:1"><input type="number" class="numval" id="tLineNum" min="0.7" max="2.5" step="0.05" value="1.18"></div>
           <div class="field row"><label style="margin:0">Letter spacing</label><input type="range" id="tLetter" min="-10" max="40" value="0" style="flex:1"><input type="number" class="numval" id="tLetterNum" min="-10" max="40" step="1" value="0"></div>
           <div class="field row"><label style="margin:0">Color</label><span class="spacer"></span><input type="text" class="hex" id="tColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="tColor" value="#3a2140"></div>
+          <div class="field">
+            <div class="row"><label style="margin:0">Saved text colors</label><span class="spacer"></span><button class="btn secondary" id="tSaveColor" style="width:auto;padding:7px 10px;font-size:11px">＋ Save color</button></div>
+            <div class="saved-colors" id="tSavedColors"><span class="hint">No saved colors yet.</span></div>
+          </div>
           <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
             <p class="glabel"><i data-lucide="layers"></i>Text layers</p>
             <div class="two">
@@ -2198,6 +2210,44 @@ function tBindColor(c,h,prop){
   $(h).addEventListener('input',()=>{ let v=$(h).value.trim(); if(/^#?[0-9a-fA-F]{3}$/.test(v)||/^#?[0-9a-fA-F]{6}$/.test(v)){ if(v[0]!=='#')v='#'+v; if(v.length===4)v='#'+[...v.slice(1)].map(x=>x+x).join(''); const ly=tCur(); if(ly){ly[prop]=v.toLowerCase(); $(c).value=v.toLowerCase();} tRender(); } });
 }
 tBindColor('tColor','tColorHex','color'); tBindColor('tStrokeColor','tStrokeColorHex','strokeColor');
+const TCOLORSKEY='peel-pop-saved-text-colors-v1';
+let tColorMemory=[], tColorLsOK=true;
+function tNormalizeColor(value){
+  let v=String(value||'').trim(); if(v[0]!=='#')v='#'+v;
+  if(/^#[0-9a-f]{3}$/i.test(v))v='#'+[...v.slice(1)].map(c=>c+c).join('');
+  return /^#[0-9a-f]{6}$/i.test(v)?v.toUpperCase():null;
+}
+function tGetSavedColors(){
+  if(tColorLsOK){try{ const v=JSON.parse(localStorage.getItem(TCOLORSKEY)||'[]'); return Array.isArray(v)?v.filter(tNormalizeColor).map(tNormalizeColor):[]; }
+  catch(_){tColorLsOK=false;}}
+  return tColorMemory.slice();
+}
+function tSetSavedColors(colors){
+  tColorMemory=colors.slice(); if(tColorLsOK){try{localStorage.setItem(TCOLORSKEY,JSON.stringify(colors));}catch(_){tColorLsOK=false;}}
+  tRenderSavedColors();
+}
+function tUseSavedColor(color){
+  const v=tNormalizeColor(color); if(!v)return;
+  $('tColor').value=v.toLowerCase(); $('tColorHex').value=v;
+  const ly=tCur(); if(ly){ly.color=v.toLowerCase();tRender();}
+}
+function tRenderSavedColors(){
+  const wrap=$('tSavedColors'), colors=tGetSavedColors(); wrap.innerHTML='';
+  if(!colors.length){const empty=document.createElement('span');empty.className='hint';empty.textContent='No saved colors yet.';wrap.appendChild(empty);return;}
+  colors.forEach(color=>{
+    const chip=document.createElement('span');chip.className='saved-color-chip';
+    const use=document.createElement('button');use.type='button';use.className='saved-color-use';use.title=`Use ${color}`;
+    const dot=document.createElement('span');dot.className='saved-color-dot';dot.style.background=color;
+    const label=document.createElement('span');label.textContent=color;use.append(dot,label);use.addEventListener('click',()=>tUseSavedColor(color));
+    const remove=document.createElement('button');remove.type='button';remove.className='saved-color-remove';remove.title=`Remove ${color}`;remove.setAttribute('aria-label',`Remove ${color}`);remove.textContent='×';
+    remove.addEventListener('click',()=>tSetSavedColors(tGetSavedColors().filter(c=>c!==color)));
+    chip.append(use,remove);wrap.appendChild(chip);
+  });
+}
+$('tSaveColor').addEventListener('click',()=>{
+  const color=tNormalizeColor($('tColor').value||$('tColorHex').value);if(!color)return;
+  const colors=tGetSavedColors().filter(c=>c!==color);colors.unshift(color);tSetSavedColors(colors.slice(0,24));
+});
 $('tStrokeOn').addEventListener('input',()=>{ const ly=tCur(); if(!ly)return; ly.strokeOn=$('tStrokeOn').checked; tRender(); });
 $('tFont').addEventListener('change',()=>{ $('tFontCustom').style.display=$('tFont').value==='__custom__'?'block':'none'; const ly=tCur(); if(ly){ ly.font=tGetFont(); tRender(); } });
 $('tFontCustom').addEventListener('input',()=>{ const ly=tCur(); if(ly){ ly.font=tGetFont(); tRender(); } });
@@ -2329,6 +2379,7 @@ $('clearAll').addEventListener('click',()=>{
 
 // init
 createIcons();
+tRenderSavedColors();
 $('donateLink').href = DONATE_URL;
 syncAll(); syncFillSeg(); refreshTplList();
 activatePage(location.hash.replace('#','')||'contour');

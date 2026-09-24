@@ -314,7 +314,8 @@
         </div>
         <div class="field row"><label style="margin:0">Size</label><input type="range" id="fontSize" min="8" max="60" value="18" style="flex:1"><input type="number" class="numval" id="fontSizeNum" min="8" max="60" step="1" value="18"></div>
         <div class="field row"><label style="margin:0">Letter gap</label><input type="range" id="letterSpace" min="0" max="20" value="2" style="flex:1"><input type="number" class="numval" id="letterSpaceNum" min="0" max="20" step="1" value="2"></div>
-        <div class="field row"><label style="margin:0">Inset from edge</label><input type="range" id="inset" min="0" max="60" value="6" style="flex:1"><input type="number" class="numval" id="insetNum" min="0" max="60" step="1" value="6"></div>
+        <div class="field row"><label style="margin:0">Move inward</label><input type="range" id="inset" min="0" max="200" value="6" style="flex:1"><input type="number" class="numval" id="insetNum" min="0" max="200" step="1" value="6"></div>
+        <p class="hint">Raise this to pull the caption farther onto the artwork. “Text on outer side” moves it away from the art instead.</p>
         <div class="field row"><label style="margin:0">Text color</label><span class="spacer"></span><input type="text" class="hex" id="textColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="textColor" value="#3a2140"></div>
         <div class="field"><label class="toggle"><input type="checkbox" id="repeat"><span class="switch"></span><span class="t-label">Repeat around whole rail</span></label></div>
         <div class="field"><label class="toggle"><input type="checkbox" id="flipText"><span class="switch"></span><span class="t-label">Text on outer side</span></label></div>
@@ -789,7 +790,7 @@ function buildMasks(im, st){
   const mask=new Uint8Array(W*H); const aT=Math.round(st.thresh*255); let any=false;
   for(let i=0;i<W*H;i++){ if(data[i*4+3]>aT){ mask[i]=1; any=true; } }
   im.mask=mask; im.cacheKey=key;
-  im.dist= any ? chamferDT(mask,W,H) : null;
+  im.dist= any ? chamferDT(mask,W,H) : null; im._innerDist=null; im._innerKey='';
 }
 function chamferDT(m,w,h){
   const INF=1e9,d=new Float32Array(w*h),D1=1,D2=Math.SQRT2;
@@ -804,6 +805,18 @@ function chamferDT(m,w,h){
 }
 const NB=[[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
 function maskFromDist(dist,W,H,maxD){ const m=new Uint8Array(W*H); for(let i=0;i<W*H;i++) m[i]=dist[i]<=maxD?1:0; return m; }
+function maskAtRailDistance(im,d){
+  if(d>=0)return maskFromDist(im.dist,im.W,im.H,d);
+  if(!im._innerDist||im._innerKey!==im.cacheKey){
+    const inv=new Uint8Array(im.W*im.H);for(let i=0;i<inv.length;i++)inv[i]=im.mask[i]?0:1;
+    im._innerDist=chamferDT(inv,im.W,im.H);im._innerKey=im.cacheKey;
+  }
+  const depth=Math.max(1,-d),m=new Uint8Array(im.W*im.H);
+  for(let i=0;i<m.length;i++)if(im.mask[i]&&im._innerDist[i]>=depth)m[i]=1;
+  const parts=labelComponents(m,im.W,im.H);
+  if(parts.count>1){let keep=1;for(let c=2;c<=parts.count;c++)if(parts.boxes[c].area>parts.boxes[keep].area)keep=c;for(let i=0;i<m.length;i++)m[i]=parts.labels[i]===keep?1:0;}
+  return m;
+}
 function trace(m,W,H,start){
   const at=(x,y)=>(x>=0&&y>=0&&x<W&&y<H)?m[y*W+x]:0;
   if(!start){ for(let y=0;y<H&&!start;y++)for(let x=0;x<W;x++){ if(m[y*W+x]){start=[x,y];break;} } }
@@ -849,14 +862,15 @@ function labelComponents(mask,W,H){
   const labels=new Int32Array(W*H); let count=0; const boxes=[]; const stack=[];
   for(let s=0;s<W*H;s++){
     if(mask[s] && labels[s]===0){
-      count++; labels[s]=count; let x0=s%W,y0=(s/W)|0,x1=x0,y1=y0;
+      count++; labels[s]=count; let x0=s%W,y0=(s/W)|0,x1=x0,y1=y0,area=0;
       stack.length=0; stack.push(s);
       while(stack.length){ const i=stack.pop(); const x=i%W, y=(i/W)|0;
+        area++;
         if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
         for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ if(!dx&&!dy)continue;
           const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=W||ny>=H)continue;
           const j=ny*W+nx; if(mask[j]&&labels[j]===0){ labels[j]=count; stack.push(j); } } }
-      boxes[count]={x0,y0,x1,y1};
+      boxes[count]={x0,y0,x1,y1,area};
     }
   }
   return {labels,count,boxes};
@@ -991,8 +1005,8 @@ function composeArt(im, st){
   a.drawImage(im.work,0,0);
 
   if(st.text.trim()){
-    const railD=st.flipText?(st.offset+st.inset):Math.max(1,st.offset-st.inset);
-    const railMask=maskFromDist(im.dist,W,H,railD);
+    const railD=st.flipText?(st.offset+st.inset):(st.offset-st.inset);
+    const railMask=maskAtRailDistance(im,railD);
     let path=trace(railMask,W,H);
     if(path.length>8){
       path=smooth(path,Math.max(3,st.smoothing));

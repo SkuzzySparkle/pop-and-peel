@@ -802,7 +802,8 @@ function buildMasks(im, st){
   const wctx=work.getContext('2d'); wctx.drawImage(im.tight, artX, artY);
   im.work=work; im.W=W; im.H=H; im.pad=pad; im.artX=artX; im.artY=artY;
   const data=wctx.getImageData(0,0,W,H).data;
-  const mask=new Uint8Array(W*H); const aT=Math.round(st.thresh*255); let any=false;
+  // Keep fully opaque artwork selectable even at 100% edge cleanup.
+  const mask=new Uint8Array(W*H); const aT=Math.min(254,Math.round(st.thresh*255)); let any=false;
   for(let i=0;i<W*H;i++){ if(data[i*4+3]>aT){ mask[i]=1; any=true; } }
   im.mask=mask; im.cacheKey=key;
   im.dist= any ? chamferDT(mask,W,H) : null; im._innerDist=null; im._innerKey='';
@@ -831,6 +832,20 @@ function maskAtRailDistance(im,d){
   const parts=labelComponents(m,im.W,im.H);
   if(parts.count>1){let keep=1;for(let c=2;c<=parts.count;c++)if(parts.boxes[c].area>parts.boxes[keep].area)keep=c;for(let i=0;i<m.length;i++)m[i]=parts.labels[i]===keep?1:0;}
   return m;
+}
+function usableRailPath(im,desired){
+  const distances=[desired];
+  // A very deep inward rail can vanish when edge cleanup slightly changes the
+  // silhouette. Walk it back toward the edge instead of making the text vanish.
+  if(desired<0) distances.push(desired*.72,desired*.5,desired*.3,0);
+  else if(desired>0) distances.push(desired*.75,desired*.5,0);
+  const seen=new Set();
+  for(const raw of distances){
+    const d=Math.round(raw*10)/10, key=String(d); if(seen.has(key))continue; seen.add(key);
+    const path=trace(maskAtRailDistance(im,d),im.W,im.H);
+    if(path.length>8)return {path,distance:d};
+  }
+  return null;
 }
 function trace(m,W,H,start){
   const at=(x,y)=>(x>=0&&y>=0&&x<W&&y<H)?m[y*W+x]:0;
@@ -1021,9 +1036,9 @@ function composeArt(im, st){
 
   if(st.text.trim()){
     const railD=st.flipText?(st.offset+st.inset):(st.offset-st.inset);
-    const railMask=maskAtRailDistance(im,railD);
-    let path=trace(railMask,W,H);
-    if(path.length>8){
+    const usable=usableRailPath(im,railD);
+    if(usable){
+      let path=usable.path;
       path=smooth(path,Math.max(3,st.smoothing));
       const pts=resample(path,1);
       const per=pts.length;

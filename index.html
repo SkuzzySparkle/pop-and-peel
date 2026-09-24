@@ -259,10 +259,13 @@
         <div class="field">
           <label>Outline fill</label>
           <div class="seg" id="fillSeg">
-            <button data-fill="1" class="on">Fill</button>
-            <button data-fill="0">Clear</button>
+            <button data-fill="solid" class="on">Solid color</button>
+            <button data-fill="bleed">Color bleed</button>
+            <button data-fill="none">No outline</button>
           </div>
           <input type="checkbox" id="fillOn" checked hidden>
+          <input type="hidden" id="fillMode" value="solid">
+          <p class="hint">Color bleed grows the artwork's edge colors outward for safer cutting without covering the original art.</p>
         </div>
         <div class="field row" id="fillColorRow"><label style="margin:0">Fill color</label><span class="spacer"></span><input type="text" class="hex" id="fillColorHex" value="#FFFFFF" spellcheck="false"><input type="color" class="color" id="fillColor" value="#ffffff"></div>
         <div class="field"><label class="toggle"><input type="checkbox" id="strokeOn"><span class="switch"></span><span class="t-label">Hairline stroke</span></label></div>
@@ -562,13 +565,28 @@
               <option value="best">Sticker-style composition</option>
               <option value="bottom">Below the sticker</option>
               <option value="top">Above the sticker</option>
-              <option value="center">Centered on the sticker</option>
+              <option value="center">On the artwork</option>
               <option value="around">Around the outline</option>
             </select>
           </div>
           <button class="btn" id="tAutoLayout" disabled>Auto layout</button>
           <button class="btn secondary" id="tTryLayout" disabled style="margin-top:8px">Try another layout</button>
           <p class="hint" id="tAutoHint">Type your words, choose a placement, then let Peel &amp; Pop fit them safely.</p>
+        </div>
+        <div class="group">
+          <p class="glabel"><i data-lucide="expand"></i>Canvas space</p>
+          <div class="field row"><label style="margin:0">Add</label><input type="range" id="tSpaceAmount" min="20" max="1000" step="10" value="200" style="flex:1"><input type="number" class="numval" id="tSpaceAmountNum" min="20" max="1000" step="10" value="200"></div>
+          <div class="two">
+            <button class="btn secondary t-space-btn" id="tSpaceTop" disabled>＋ Top</button>
+            <button class="btn secondary t-space-btn" id="tSpaceBottom" disabled>＋ Bottom</button>
+          </div>
+          <div class="two" style="margin-top:8px">
+            <button class="btn secondary t-space-btn" id="tSpaceLeft" disabled>＋ Left</button>
+            <button class="btn secondary t-space-btn" id="tSpaceRight" disabled>＋ Right</button>
+          </div>
+          <button class="btn secondary t-space-btn" id="tSpaceAll" disabled style="margin-top:8px">＋ All sides</button>
+          <button class="btn secondary" id="tSpaceUndo" disabled style="margin-top:8px">Undo canvas change</button>
+          <p class="hint">Adds transparent room for text without stretching your artwork. Saved PNGs include the extra space.</p>
         </div>
         <div class="group">
           <p class="glabel"><i data-lucide="type"></i>Text</p>
@@ -717,7 +735,7 @@ let activeRail = null;
 // ---------- state ----------
 function readState(){
   return {
-    offset:+$('offset').value, smoothing:+$('smoothing').value, holeBorder:+$('holeBorder').value, sheet:$('sheet').checked, holes:$('holes').checked, fillOn:$('fillOn').checked, fillColor:$('fillColor').value,
+    offset:+$('offset').value, smoothing:+$('smoothing').value, holeBorder:+$('holeBorder').value, sheet:$('sheet').checked, holes:$('holes').checked, fillOn:$('fillOn').checked, fillMode:$('fillMode').value, fillColor:$('fillColor').value,
     strokeOn:$('strokeOn').checked, strokeColor:$('strokeColor').value, strokeW:+$('strokeW').value,
     thresh:+$('thresh').value/100, text:$('text').value, fontSize:+$('fontSize').value,
     letterSpace:+$('letterSpace').value, inset:+$('inset').value, textColor:$('textColor').value, font:getFontFamily(),
@@ -862,6 +880,25 @@ function getSheetData(im){
   im._sheet={key:im.cacheKey,count,boxes,dist,fl};
   return im._sheet;
 }
+function getColorBleedCanvas(im,maxD){
+  const key=im.cacheKey+'|'+maxD;if(im._colorBleed&&im._colorBleed.key===key)return im._colorBleed.canvas;
+  const W=im.W,H=im.H,N=W*H,INF=1e9,D1=1,D2=Math.SQRT2,dist=new Float32Array(N),near=new Int32Array(N);
+  for(let i=0;i<N;i++){if(im.mask[i]){dist[i]=0;near[i]=i;}else{dist[i]=INF;near[i]=-1;}}
+  const upd=(i,j,c)=>{if(j>=0&&j<N&&near[j]>=0&&dist[j]+c<dist[i]){dist[i]=dist[j]+c;near[i]=near[j];}};
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(x)upd(i,i-1,D1);if(y)upd(i,i-W,D1);if(x&&y)upd(i,i-W-1,D2);if(x<W-1&&y)upd(i,i-W+1,D2);}
+  for(let y=H-1;y>=0;y--)for(let x=W-1;x>=0;x--){const i=y*W+x;if(x<W-1)upd(i,i+1,D1);if(y<H-1)upd(i,i+W,D1);if(x<W-1&&y<H-1)upd(i,i+W+1,D2);if(x&&y<H-1)upd(i,i+W-1,D2);}
+  const src=im.work.getContext('2d').getImageData(0,0,W,H).data,out=new ImageData(W,H);
+  for(let i=0;i<N;i++){const n=near[i];if(n<0||dist[i]>maxD)continue;const oi=i*4,si=n*4;out.data[oi]=src[si];out.data[oi+1]=src[si+1];out.data[oi+2]=src[si+2];out.data[oi+3]=255;}
+  const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').putImageData(out,0,0);im._colorBleed={key,canvas:c};return c;
+}
+function drawColorBleed(a,im,mask,W,H,st,startHint,holeMask){
+  const clip=document.createElement('canvas');clip.width=W;clip.height=H;
+  drawStickerShape(clip.getContext('2d'),mask,W,H,{...st,fillOn:true,fillColor:'#ffffff',strokeOn:false},startHint,holeMask);
+  const colored=document.createElement('canvas');colored.width=W;colored.height=H;const c=colored.getContext('2d');
+  const base=getColorBleedCanvas(im,st.offset),soft=Math.max(1,Math.min(8,st.offset*.08+st.smoothing*.25));
+  c.drawImage(base,0,0);c.save();c.globalCompositeOperation='source-atop';c.filter=`blur(${soft}px)`;c.drawImage(base,0,0);c.restore();
+  c.globalCompositeOperation='destination-in';c.drawImage(clip,0,0);a.drawImage(colored,0,0);
+}
 function drawSheet(a, im, st){
   const {W,H}=im; const sd=getSheetData(im);
   const cm=new Uint8Array(W*H);
@@ -878,7 +915,10 @@ function drawSheet(a, im, st){
     if(st.holes){ hm=new Uint8Array(W*H);
       for(let y=y0;y<=y1;y++){ const r=y*W; for(let x=x0;x<=x1;x++){ const i=r+x;
         if(sd.dist[i]<=st.holeBorder && sd.fl[i]===c) hm[i]=1; } } }
-    drawStickerShape(a, cm, W, H, st, start, hm);
+    if(st.fillMode==='bleed'){
+      drawColorBleed(a,im,cm,W,H,st,start,hm);
+      if(st.strokeOn)drawStickerShape(a,cm,W,H,{...st,fillOn:false},start,hm);
+    }else drawStickerShape(a, cm, W, H, st, start, hm);
   }
 }
 // find enclosed holes in a sticker mask (background not connected to the image border)
@@ -943,7 +983,10 @@ function composeArt(im, st){
   const stickerMask=maskFromDist(im.dist,W,H,st.offset);
   if(st.fillOn||st.strokeOn){
     const holeMask = st.holes ? maskFromDist(im.dist,W,H,st.holeBorder) : null;
-    drawStickerShape(a, stickerMask, W, H, st, null, holeMask);
+    if(st.fillMode==='bleed'){
+      drawColorBleed(a,im,stickerMask,W,H,st,null,holeMask);
+      if(st.strokeOn)drawStickerShape(a,stickerMask,W,H,{...st,fillOn:false},null,holeMask);
+    }else drawStickerShape(a, stickerMask, W, H, st, null, holeMask);
   }
   a.drawImage(im.work,0,0);
 
@@ -1160,16 +1203,17 @@ function syncAll(){
   COLORS.forEach(id=>{ const h=$(id+'Hex'); if(h) h.value=$(id).value.toUpperCase(); });
 }
 
-// fill / clear segmented control
+// outline mode segmented control
 function syncFillSeg(){
-  const on=$('fillOn').checked;
-  [...$('fillSeg').children].forEach(c=>c.classList.toggle('on', c.dataset.fill===(on?'1':'0')));
-  $('fillColorRow').style.opacity=on?'1':'.4';
-  $('fillColorRow').style.pointerEvents=on?'auto':'none';
+  const mode=$('fillMode').value||($('fillOn').checked?'solid':'none');
+  $('fillOn').checked=mode!=='none';
+  [...$('fillSeg').children].forEach(c=>c.classList.toggle('on', c.dataset.fill===mode));
+  $('fillColorRow').style.opacity=mode==='solid'?'1':'.4';
+  $('fillColorRow').style.pointerEvents=mode==='solid'?'auto':'none';
 }
 $('fillSeg').addEventListener('click',e=>{
   const b=e.target.closest('button[data-fill]'); if(!b) return;
-  $('fillOn').checked = b.dataset.fill==='1';
+  $('fillMode').value=b.dataset.fill;$('fillOn').checked=b.dataset.fill!=='none';
   syncFillSeg(); scheduleRender(); pushHistory();
 });
 
@@ -1205,6 +1249,7 @@ function resetContourSettings(){
   const d={offset:14,smoothing:2,holeBorder:6,strokeW:4,thresh:50,fontSize:18,letterSpace:2,inset:6,fillColor:'#ffffff',strokeColor:'#ff6fb5',textColor:'#3a2140',font:'Fredoka',text:'© YOUR NAME HERE'};
   const c={fillOn:true,strokeOn:false,repeat:false,flipText:false,flipDir:false,flip:false,sheet:false,holes:false};
   for(const k in d) $(k).value=d[k]; for(const k in c) $(k).checked=c[k];
+  $('fillMode').value='solid';
   images.forEach(im=>im.pos=null);
   setZone(8); syncAll(); syncFillSeg(); toggleFontCustom(); scheduleRender(); pushHistory();
 }
@@ -1229,6 +1274,7 @@ function gather(){
   SLIDERS.forEach(id=>o[id]=$(id).value);
   COLORS.forEach(id=>o[id]=$(id).value);
   o.text=$('text').value; o.font=getFontFamily(); o.zone=curZone;
+  o.fillMode=$('fillMode').value;
   ['strokeOn','repeat','flipText','flipDir','flip','fillOn','sheet','holes'].forEach(id=>o[id]=$(id).checked);
   return o;
 }
@@ -1244,6 +1290,7 @@ function applyTpl(o){
     toggleFontCustom();
   }
   ['strokeOn','repeat','flipText','flipDir','flip','fillOn','sheet','holes'].forEach(id=>{ if(o[id]!=null) $(id).checked=o[id]; });
+  $('fillMode').value=o.fillMode||(o.fillOn===false?'none':'solid');
   if(o.zone!=null) setZone(o.zone);
   syncAll(); syncFillSeg(); scheduleRender();
 }
@@ -1760,7 +1807,7 @@ function clearContourAll(){
 
 // ---------- text studio ----------
 const tCanvas=$('tCanvas'), tctx=tCanvas.getContext('2d');
-let tImg=null, tLayers=[], tActive=-1, tDrag=null, tRot=null, tResize=null, tEditor=null; const TMAX=1600;
+let tImg=null, tLayers=[], tActive=-1, tDrag=null, tRot=null, tResize=null, tEditor=null, tCanvasHistory=[]; const TMAX=1600, TCANVASMAX=6000;
 function tGetFont(){ const v=$('tFont').value; return v==='__custom__' ? ($('tFontCustom').value.trim()||'sans-serif') : v; }
 function tCur(){ return tActive>=0?tLayers[tActive]:null; }
 function tLoad(file){
@@ -1771,6 +1818,7 @@ function tLoad(file){
     const W=Math.max(1,Math.round(w*s)), H=Math.max(1,Math.round(h*s));
     const c=document.createElement('canvas'); c.width=W; c.height=H; c.getContext('2d').drawImage(im,0,0,W,H);
     tImg={canvas:c,W,H,name:file.name.replace(/\.[^.]+$/,'')};
+    tCanvasHistory=[]; tUpdateCanvasSpaceButtons(true);
     $('tempty').style.display='none'; $('tDownload').disabled=false; $('tToContour').disabled=false;
     $('tAutoLayout').disabled=false; $('tTryLayout').disabled=false;
     $('tmeta').textContent=`${W}×${H}px`;
@@ -1883,16 +1931,35 @@ function tOpaqueBounds(){
   tImg._bounds=maxX<0?{x:0,y:0,w:tImg.W,h:tImg.H}:{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
   return tImg._bounds;
 }
+function tUpdateCanvasSpaceButtons(enabled=!!tImg){
+  document.querySelectorAll('.t-space-btn').forEach(btn=>btn.disabled=!enabled);
+  $('tSpaceUndo').disabled=!enabled||!tCanvasHistory.length;
+}
+function tInvalidateImageGeometry(){
+  if(!tImg)return;delete tImg._bounds;delete tImg._md;delete tImg._mdKey;tLayers.forEach(ly=>delete ly._followGeom);
+}
+function tExpandCanvas(top,right,bottom,left,record=true){
+  if(!tImg)return false;top=Math.max(0,Math.round(top));right=Math.max(0,Math.round(right));bottom=Math.max(0,Math.round(bottom));left=Math.max(0,Math.round(left));
+  if(!top&&!right&&!bottom&&!left)return false;
+  const oldW=tImg.W,oldH=tImg.H,newW=oldW+left+right,newH=oldH+top+bottom;
+  if(newW>TCANVASMAX||newH>TCANVASMAX){alert(`Canvas can be up to ${TCANVASMAX} pixels on each side. Use a smaller amount.`);return false;}
+  tCloseEditor();
+  if(record)tCanvasHistory.push({canvas:tImg.canvas,W:oldW,H:oldH,left,top,compositionPadded:tImg._compositionPadded,sourceFullBleed:tImg._sourceFullBleed});
+  const c=document.createElement('canvas');c.width=newW;c.height=newH;c.getContext('2d').drawImage(tImg.canvas,left,top);
+  tImg.canvas=c;tImg.W=newW;tImg.H=newH;tImg._compositionPadded=true;tLayers.forEach(ly=>{ly.x+=left;ly.y+=top;});
+  tInvalidateImageGeometry();$('tmeta').textContent=`${newW}×${newH}px`;tUpdateCanvasSpaceButtons();tRender();return true;
+}
+function tUndoCanvasExpansion(){
+  if(!tImg||!tCanvasHistory.length)return;const h=tCanvasHistory.pop();tCloseEditor();
+  tImg.canvas=h.canvas;tImg.W=h.W;tImg.H=h.H;tImg._compositionPadded=h.compositionPadded;tImg._sourceFullBleed=h.sourceFullBleed;
+  tLayers.forEach(ly=>{ly.x-=h.left;ly.y-=h.top;});tInvalidateImageGeometry();$('tmeta').textContent=`${h.W}×${h.H}px`;tUpdateCanvasSpaceButtons();tRender();
+}
 function tEnsureCompositionSpace(){
   if(!tImg||tImg._compositionPadded)return;
   const b=tOpaqueBounds(), oldW=tImg.W,oldH=tImg.H, desired=Math.max(28,Math.round(Math.min(oldW,oldH)*.12));
   tImg._sourceFullBleed=b.w>oldW*.96&&b.h>oldH*.96;
   const left=Math.max(0,desired-b.x),top=Math.max(0,desired-b.y),right=Math.max(0,desired-(oldW-b.x-b.w)),bottom=Math.max(0,desired-(oldH-b.y-b.h));
-  if(left||top||right||bottom){
-    const c=document.createElement('canvas');c.width=oldW+left+right;c.height=oldH+top+bottom;c.getContext('2d').drawImage(tImg.canvas,left,top);
-    tImg.canvas=c;tImg.W=c.width;tImg.H=c.height;tLayers.forEach(ly=>{ly.x+=left;ly.y+=top;delete ly._followGeom;});
-    delete tImg._bounds;delete tImg._md;delete tImg._mdKey;$('tmeta').textContent=`${tImg.W}×${tImg.H}px`;
-  }
+  if(left||top||right||bottom)tExpandCanvas(top,right,bottom,left,true);
   tImg._compositionPadded=true;
 }
 function tLineCandidates(text){
@@ -2070,6 +2137,15 @@ $('tDelLayer').addEventListener('click',tDelLayer);
 $('tAutoLayout').addEventListener('click',()=>tRunAutoLayout(false));
 $('tTryLayout').addEventListener('click',()=>tRunAutoLayout(true));
 $('tAutoPlace').addEventListener('change',()=>{ tAutoVariant=0; if(tImg) tRunAutoLayout(false); });
+function tSpaceValue(){return Math.max(20,Math.min(1000,parseInt($('tSpaceAmountNum').value,10)||200));}
+$('tSpaceAmount').addEventListener('input',()=>{$('tSpaceAmountNum').value=$('tSpaceAmount').value;});
+$('tSpaceAmountNum').addEventListener('input',()=>{const v=tSpaceValue();$('tSpaceAmount').value=v;});
+$('tSpaceTop').addEventListener('click',()=>tExpandCanvas(tSpaceValue(),0,0,0));
+$('tSpaceBottom').addEventListener('click',()=>tExpandCanvas(0,0,tSpaceValue(),0));
+$('tSpaceLeft').addEventListener('click',()=>tExpandCanvas(0,0,0,tSpaceValue()));
+$('tSpaceRight').addEventListener('click',()=>tExpandCanvas(0,tSpaceValue(),0,0));
+$('tSpaceAll').addEventListener('click',()=>{const v=tSpaceValue();tExpandCanvas(v,v,v,v);});
+$('tSpaceUndo').addEventListener('click',tUndoCanvasExpansion);
 $('tLayerList').addEventListener('change',()=>{ tActive=+$('tLayerList').value; tSync(); tRender(); });
 $('tBrowse').addEventListener('click',()=>$('tfile').click());
 $('tfile').addEventListener('change',e=>{ if(e.target.files[0]) tLoad(e.target.files[0]); e.target.value=''; });
@@ -2152,6 +2228,7 @@ function clearTextAll(){
   tCloseEditor(); tImg=null; tLayers=[]; tActive=-1; tRefreshLayers();
   $('tempty').style.display='grid'; $('tDownload').disabled=true; $('tToContour').disabled=true; $('tmeta').textContent='no image loaded';
   $('tAutoLayout').disabled=true; $('tTryLayout').disabled=true; tAutoVariant=0;
+  tCanvasHistory=[];tUpdateCanvasSpaceButtons(false);
   $('tAutoHint').textContent='Type your words, choose a placement, then let Peel & Pop fit them safely.';
   tCanvas.width=10; tCanvas.height=10; tctx.clearRect(0,0,10,10);
 }

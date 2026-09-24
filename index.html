@@ -344,6 +344,17 @@
         <button class="iconbtn" id="redo" title="Redo (Ctrl/Cmd+Shift+Z)" disabled><i data-lucide="redo-2"></i></button>
         <div class="mini"><button class="btn secondary" id="browse">Add files</button></div>
       </div>
+      <div class="stage-foot" style="padding-top:0;gap:6px;flex-wrap:wrap">
+        <span class="meta">Add 200px canvas to this sticker:</span>
+        <div class="mini" style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn secondary c-space-btn" id="cSpaceTop" disabled style="padding:7px 10px">＋ Top</button>
+          <button class="btn secondary c-space-btn" id="cSpaceBottom" disabled style="padding:7px 10px">＋ Bottom</button>
+          <button class="btn secondary c-space-btn" id="cSpaceLeft" disabled style="padding:7px 10px">＋ Left</button>
+          <button class="btn secondary c-space-btn" id="cSpaceRight" disabled style="padding:7px 10px">＋ Right</button>
+          <button class="btn secondary" id="cSpaceAll" disabled style="padding:7px 10px">＋ All sides</button>
+          <button class="btn secondary" id="cSpaceUndo" disabled style="padding:7px 10px">Undo space</button>
+        </div>
+      </div>
       <p class="hint">Mirror bakes into the saved PNG (great for iron-on / transfer). Everything runs in your browser; nothing uploads.</p>
     </div>
 
@@ -771,7 +782,9 @@ function loadFiles(fileList){
       const W=Math.max(1,Math.round(w*s)), H=Math.max(1,Math.round(h*s));
       const c=document.createElement('canvas'); c.width=W; c.height=H;
       c.getContext('2d').drawImage(im,0,0,W,H);
-      images.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, tw:W, th:H, W, H, pad:0, work:c, mask:null, dist:null, cacheKey:'', pos:null});
+      images.push({name:file.name.replace(/\.[^.]+$/,''), tight:c, tw:W, th:H, W, H, pad:0, artX:0, artY:0,
+        extraTop:0, extraRight:0, extraBottom:0, extraLeft:0, canvasHistory:[],
+        work:c, mask:null, dist:null, cacheKey:'', pos:null});
       if(active<0) active=0;
       if(--pending===0){ $('empty').style.display='none'; $('download').disabled=false; $('downloadAll').disabled=false; $('toText').disabled=false;
         stage.classList.add('placing'); renderThumbs(); render(); }
@@ -790,12 +803,14 @@ function computePad(im, st){
 }
 function buildMasks(im, st){
   const pad=computePad(im, st);
-  const key=st.thresh+'|'+pad;
+  const top=im.extraTop||0, right=im.extraRight||0, bottom=im.extraBottom||0, left=im.extraLeft||0;
+  const key=[st.thresh,pad,top,right,bottom,left].join('|');
   if(im.dist && im.cacheKey===key) return;
-  const tw=im.tw, th=im.th, W=tw+2*pad, H=th+2*pad;
+  const tw=im.tw, th=im.th, W=tw+2*pad+left+right, H=th+2*pad+top+bottom;
+  const artX=pad+left, artY=pad+top;
   const work=document.createElement('canvas'); work.width=W; work.height=H;
-  const wctx=work.getContext('2d'); wctx.drawImage(im.tight, pad, pad);
-  im.work=work; im.W=W; im.H=H; im.pad=pad;
+  const wctx=work.getContext('2d'); wctx.drawImage(im.tight, artX, artY);
+  im.work=work; im.W=W; im.H=H; im.pad=pad; im.artX=artX; im.artY=artY;
   const data=wctx.getImageData(0,0,W,H).data;
   const mask=new Uint8Array(W*H); const aT=Math.round(st.thresh*255); let any=false;
   for(let i=0;i<W*H;i++){ if(data[i*4+3]>aT){ mask[i]=1; any=true; } }
@@ -1064,7 +1079,7 @@ function drawGlyphs(ctx, pts, per, st, startFrac, g){
 // nearest rail point to the chosen 3x3 zone -> start fraction (centers text there)
 function zoneFraction(im, st, pts, per, textHalf){
   const cx=[0.15,0.5,0.85][st.zone%3], cy=[0.15,0.5,0.85][Math.floor(st.zone/3)];
-  const ax=im.pad + cx*im.tw, ay=im.pad + cy*im.th;
+  const ax=(im.artX??im.pad) + cx*im.tw, ay=(im.artY??im.pad) + cy*im.th;
   let best=0,bd=Infinity;
   for(let i=0;i<pts.length;i++){ const dx=pts[i][0]-ax,dy=pts[i][1]-ay,d=dx*dx+dy*dy; if(d<bd){bd=d;best=i;} }
   let frac=(best-textHalf)/per; return ((frac%1)+1)%1;
@@ -1074,6 +1089,7 @@ function zoneFraction(im, st, pts, per, textHalf){
 let raf=null;
 function scheduleRender(){ if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(render); }
 function render(){
+  updateContourSpaceButtons();
   if(active<0 || !images[active]){ return; }
   const im=images[active], st=readState();
   const {art, rail, empty}=composeArt(im, st);
@@ -1087,8 +1103,43 @@ function render(){
   im._art=art; // cache for export
   $('meta').textContent = empty
     ? 'no visible pixels — is this PNG empty?'
-    : `${im.tw}×${im.th}px · sticker ${active+1} of ${images.length}${im.pos!=null?' · custom position':''}`;
+    : `${im.W}×${im.H}px canvas · ${im.tw}×${im.th}px art · sticker ${active+1} of ${images.length}${im.pos!=null?' · custom position':''}`;
 }
+
+// ---------- extra canvas space for rail text ----------
+const CSPACE=200, CCANVASMAX=6000;
+function updateContourSpaceButtons(){
+  const im=active>=0?images[active]:null, disabled=!im;
+  document.querySelectorAll('.c-space-btn').forEach(b=>b.disabled=disabled);
+  $('cSpaceAll').disabled=disabled;
+  $('cSpaceUndo').disabled=disabled || !im.canvasHistory || !im.canvasHistory.length;
+}
+function invalidateContourCanvas(im){
+  im.dist=null; im.mask=null; im.cacheKey=''; im._sheet=null; im._colorBleed=null; im._innerDist=null; im._innerKey='';
+}
+function expandContourCanvas(top,right,bottom,left){
+  if(active<0||!images[active])return;
+  const im=images[active], st=readState(), pad=computePad(im,st);
+  const nt=(im.extraTop||0)+top, nr=(im.extraRight||0)+right,
+    nb=(im.extraBottom||0)+bottom, nl=(im.extraLeft||0)+left;
+  if(im.tw+2*pad+nl+nr>CCANVASMAX || im.th+2*pad+nt+nb>CCANVASMAX){ alert(`Canvas can be up to ${CCANVASMAX}px per side.`); return; }
+  im.canvasHistory=im.canvasHistory||[];
+  im.canvasHistory.push({top:im.extraTop||0,right:im.extraRight||0,bottom:im.extraBottom||0,left:im.extraLeft||0});
+  im.extraTop=nt; im.extraRight=nr; im.extraBottom=nb; im.extraLeft=nl;
+  invalidateContourCanvas(im); render();
+}
+function undoContourCanvas(){
+  if(active<0||!images[active])return;
+  const im=images[active], prev=(im.canvasHistory||[]).pop(); if(!prev)return;
+  im.extraTop=prev.top; im.extraRight=prev.right; im.extraBottom=prev.bottom; im.extraLeft=prev.left;
+  invalidateContourCanvas(im); render();
+}
+$('cSpaceTop').addEventListener('click',()=>expandContourCanvas(CSPACE,0,0,0));
+$('cSpaceBottom').addEventListener('click',()=>expandContourCanvas(0,0,CSPACE,0));
+$('cSpaceLeft').addEventListener('click',()=>expandContourCanvas(0,0,0,CSPACE));
+$('cSpaceRight').addEventListener('click',()=>expandContourCanvas(0,CSPACE,0,0));
+$('cSpaceAll').addEventListener('click',()=>expandContourCanvas(CSPACE,CSPACE,CSPACE,CSPACE));
+$('cSpaceUndo').addEventListener('click',undoContourCanvas);
 
 // ---------- thumbnails ----------
 function renderThumbs(){
@@ -1109,6 +1160,7 @@ function renderThumbs(){
   if(images.length){ const add=document.createElement('button'); add.className='addthumb'; add.innerHTML='<i data-lucide="plus"></i>';
     add.onclick=()=>$('file').click(); wrap.appendChild(add); }
   const multi=images.length>1, cp=$('cPrev'), cn=$('cNext'); if(cp)cp.disabled=!multi; if(cn)cn.disabled=!multi;
+  updateContourSpaceButtons();
   createIcons();
 }
 function removeImage(idx){

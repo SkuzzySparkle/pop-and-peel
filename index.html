@@ -146,6 +146,7 @@
     transition:transform .12s, box-shadow .12s;}
   .btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(230,76,153,.42);}
   .btn:active{transform:translateY(0);}
+  .btn.tool-active{background:linear-gradient(135deg,var(--pink),var(--grape));border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(138,92,246,.22);}
   .btn.secondary{background:var(--lilac);color:var(--grape);box-shadow:none;font-size:14px;padding:10px;}
   .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none;}
 
@@ -172,6 +173,7 @@
   .dropzone.drag{border-color:var(--pink);}
   #stageCanvas,#vCanvas,#tCanvas{max-width:100%;max-height:64vh;image-rendering:auto;display:block;touch-action:none;}
   #stageCanvas.placing{cursor:crosshair;}
+  #stageCanvas.canvas-resize{cursor:crosshair;}
   .empty{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;
     text-align:center;pointer-events:none;color:var(--muted);padding:24px;}
   .empty .big{font-size:46px;}
@@ -364,14 +366,10 @@
         <div class="mini"><button class="btn secondary" id="browse">Add files</button></div>
       </div>
       <div class="stage-foot" style="padding-top:0;gap:6px;flex-wrap:wrap">
-        <span class="meta">Add 200px canvas to this sticker:</span>
+        <span class="meta" id="cCanvasResizeHint">Resize the canvas:</span>
         <div class="mini" style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn secondary c-space-btn" id="cSpaceTop" disabled style="padding:7px 10px">＋ Top</button>
-          <button class="btn secondary c-space-btn" id="cSpaceBottom" disabled style="padding:7px 10px">＋ Bottom</button>
-          <button class="btn secondary c-space-btn" id="cSpaceLeft" disabled style="padding:7px 10px">＋ Left</button>
-          <button class="btn secondary c-space-btn" id="cSpaceRight" disabled style="padding:7px 10px">＋ Right</button>
-          <button class="btn secondary" id="cSpaceAll" disabled style="padding:7px 10px">＋ All sides</button>
-          <button class="btn secondary" id="cSpaceUndo" disabled style="padding:7px 10px">Undo space</button>
+          <button class="btn secondary" id="cCanvasResize" disabled style="padding:7px 12px">Expand canvas</button>
+          <button class="btn secondary" id="cSpaceUndo" disabled style="padding:7px 10px">Undo canvas resize</button>
         </div>
       </div>
       <p class="hint">Mirror bakes into the saved PNG (great for iron-on / transfer). Everything runs in your browser; nothing uploads.</p>
@@ -1157,33 +1155,28 @@ function render(){
   sctx.drawImage(art,0,0);
   sctx.restore();
   drawWeldSelection(im,st);
+  drawCanvasResizeOverlay(im);
   im._art=art; // cache for export
   $('meta').textContent = empty
     ? 'no visible pixels — is this PNG empty?'
     : `${im.W}×${im.H}px canvas · ${im.tw}×${im.th}px art · sticker ${active+1} of ${images.length}${im.pos!=null?' · custom position':''}`;
 }
 
-// ---------- extra canvas space for rail text ----------
-const CSPACE=200, CCANVASMAX=6000;
+// ---------- drag-to-resize canvas space ----------
+const CCANVASMAX=6000;
+let contourResizeMode=false, canvasEdgeDrag=null;
 function updateContourSpaceButtons(){
   const im=active>=0?images[active]:null, disabled=!im;
-  document.querySelectorAll('.c-space-btn').forEach(b=>b.disabled=disabled);
-  $('cSpaceAll').disabled=disabled;
+  $('cCanvasResize').disabled=disabled;
   $('cSpaceUndo').disabled=disabled || !im.canvasHistory || !im.canvasHistory.length;
+  if(disabled&&contourResizeMode){contourResizeMode=false;canvasEdgeDrag=null;}
+  $('cCanvasResize').classList.toggle('tool-active',contourResizeMode&&!disabled);
+  stage.classList.toggle('canvas-resize',contourResizeMode&&!disabled);
+  $('cCanvasResize').textContent=contourResizeMode?'Done resizing':'Expand canvas';
+  $('cCanvasResizeHint').textContent=contourResizeMode?'Drag any pink edge outward or inward:':'Resize the canvas:';
 }
 function invalidateContourCanvas(im){
   im.dist=null; im.mask=null; im.cacheKey=''; im._sheet=null; im._colorBleed=null; im._innerDist=null; im._innerKey='';
-}
-function expandContourCanvas(top,right,bottom,left){
-  if(active<0||!images[active])return;
-  const im=images[active], st=readState(), pad=computePad(im,st);
-  const nt=(im.extraTop||0)+top, nr=(im.extraRight||0)+right,
-    nb=(im.extraBottom||0)+bottom, nl=(im.extraLeft||0)+left;
-  if(im.tw+2*pad+nl+nr>CCANVASMAX || im.th+2*pad+nt+nb>CCANVASMAX){ alert(`Canvas can be up to ${CCANVASMAX}px per side.`); return; }
-  im.canvasHistory=im.canvasHistory||[];
-  im.canvasHistory.push({top:im.extraTop||0,right:im.extraRight||0,bottom:im.extraBottom||0,left:im.extraLeft||0});
-  im.extraTop=nt; im.extraRight=nr; im.extraBottom=nb; im.extraLeft=nl;
-  invalidateContourCanvas(im); render();
 }
 function undoContourCanvas(){
   if(active<0||!images[active])return;
@@ -1191,12 +1184,14 @@ function undoContourCanvas(){
   im.extraTop=prev.top; im.extraRight=prev.right; im.extraBottom=prev.bottom; im.extraLeft=prev.left;
   invalidateContourCanvas(im); render();
 }
-$('cSpaceTop').addEventListener('click',()=>expandContourCanvas(CSPACE,0,0,0));
-$('cSpaceBottom').addEventListener('click',()=>expandContourCanvas(0,0,CSPACE,0));
-$('cSpaceLeft').addEventListener('click',()=>expandContourCanvas(0,0,0,CSPACE));
-$('cSpaceRight').addEventListener('click',()=>expandContourCanvas(0,CSPACE,0,0));
-$('cSpaceAll').addEventListener('click',()=>expandContourCanvas(CSPACE,CSPACE,CSPACE,CSPACE));
+$('cCanvasResize').addEventListener('click',()=>{if(active<0)return;contourResizeMode=!contourResizeMode;canvasEdgeDrag=null;updateContourSpaceButtons();render();});
 $('cSpaceUndo').addEventListener('click',undoContourCanvas);
+function drawCanvasResizeOverlay(im){
+  if(!contourResizeMode)return;const lw=Math.max(3,im.W/450),hs=Math.max(12,im.W/85),cx=im.W/2,cy=im.H/2;
+  sctx.save();sctx.strokeStyle='#FF4FA3';sctx.fillStyle='#fff';sctx.lineWidth=lw;sctx.setLineDash([12,8]);
+  sctx.strokeRect(lw/2,lw/2,im.W-lw,im.H-lw);sctx.setLineDash([]);
+  [[cx,hs/2],[cx,im.H-hs/2],[hs/2,cy],[im.W-hs/2,cy]].forEach(([x,y])=>{sctx.beginPath();sctx.rect(x-hs/2,y-hs/2,hs,hs);sctx.fill();sctx.stroke();});sctx.restore();
+}
 
 // ---------- thumbnails ----------
 function renderThumbs(){
@@ -1271,14 +1266,35 @@ function placeTextAt(clientX, clientY){
 }
 function contourPoint(e){const im=images[active],st=readState(),r=stage.getBoundingClientRect();let x=(e.clientX-r.left)*(im.W/r.width);if(st.flip)x=im.W-x;return{x,y:(e.clientY-r.top)*(im.H/r.height)};}
 let dragging=false,weldDrag=null;
-stage.addEventListener('pointerdown',e=>{ if(active<0)return;const im=images[active],p=contourPoint(e),addons=im.addons||[];let hit=-1;
+function resizeEdgeAt(e){const r=stage.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,d=[['left',x],['right',r.width-x],['top',y],['bottom',r.height-y]].sort((a,b)=>a[1]-b[1]);return d[0][1]<=32?d[0][0]:null;}
+function beginCanvasEdgeDrag(e,im){
+  const visualEdge=resizeEdgeAt(e);if(!visualEdge)return false;const st=readState();let side=visualEdge;
+  if(st.flip){if(side==='left')side='right';else if(side==='right')side='left';}
+  const r=stage.getBoundingClientRect(),before={top:im.extraTop||0,right:im.extraRight||0,bottom:im.extraBottom||0,left:im.extraLeft||0};
+  canvasEdgeDrag={im,visualEdge,side,startX:e.clientX,startY:e.clientY,scaleX:im.W/r.width,scaleY:im.H/r.height,startW:im.W,startH:im.H,before,changed:false};
+  try{stage.setPointerCapture(e.pointerId);}catch(_){}return true;
+}
+function moveCanvasEdge(e){
+  const d=canvasEdgeDrag;if(!d||!images.includes(d.im))return;const im=d.im,dx=(e.clientX-d.startX)*d.scaleX,dy=(e.clientY-d.startY)*d.scaleY;
+  let delta=d.visualEdge==='left'?-dx:d.visualEdge==='right'?dx:d.visualEdge==='top'?-dy:dy;
+  const horizontal=d.side==='left'||d.side==='right',max=d.before[d.side]+Math.max(0,CCANVASMAX-(horizontal?d.startW:d.startH));
+  const value=Math.max(0,Math.min(max,Math.round(d.before[d.side]+delta)));if(value===(im['extra'+d.side[0].toUpperCase()+d.side.slice(1)]||0))return;
+  im['extra'+d.side[0].toUpperCase()+d.side.slice(1)]=value;d.changed=true;invalidateContourCanvas(im);scheduleRender();
+}
+stage.addEventListener('pointerdown',e=>{ if(active<0)return;const im=images[active];
+  if(contourResizeMode){beginCanvasEdgeDrag(e,im);return;}
+  const p=contourPoint(e),addons=im.addons||[];let hit=-1;
   for(let i=addons.length-1;i>=0;i--){const b=addons[i]._stage;if(b&&p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){hit=i;break;}}
   try{stage.setPointerCapture(e.pointerId);}catch(_){}
   if(hit>=0){im.addonActive=hit;const a=addons[hit];weldDrag={dx:p.x-a._stage.cx,dy:p.y-a._stage.cy};updateWeldControls();render();return;}
   dragging=true;placeTextAt(e.clientX,e.clientY);
 });
-stage.addEventListener('pointermove',e=>{if(weldDrag&&active>=0){const im=images[active],a=selectedWeld(),p=contourPoint(e);if(!a)return;a.x=p.x-im.artX-weldDrag.dx;a.y=p.y-im.artY-weldDrag.dy;invalidateContourCanvas(im);scheduleRender();}else if(dragging)placeTextAt(e.clientX,e.clientY);});
-function endContourDrag(){dragging=false;weldDrag=null;}
+stage.addEventListener('pointermove',e=>{if(canvasEdgeDrag)moveCanvasEdge(e);else if(weldDrag&&active>=0){const im=images[active],a=selectedWeld(),p=contourPoint(e);if(!a)return;a.x=p.x-im.artX-weldDrag.dx;a.y=p.y-im.artY-weldDrag.dy;invalidateContourCanvas(im);scheduleRender();}else if(dragging)placeTextAt(e.clientX,e.clientY);});
+function endContourDrag(){
+  if(canvasEdgeDrag){const d=canvasEdgeDrag;canvasEdgeDrag=null;const now={top:d.im.extraTop||0,right:d.im.extraRight||0,bottom:d.im.extraBottom||0,left:d.im.extraLeft||0};
+    if(d.changed&&JSON.stringify(now)!==JSON.stringify(d.before)){d.im.canvasHistory=d.im.canvasHistory||[];d.im.canvasHistory.push(d.before);updateContourSpaceButtons();render();}}
+  dragging=false;weldDrag=null;
+}
 stage.addEventListener('pointerup',endContourDrag);
 stage.addEventListener('pointercancel',endContourDrag);
 

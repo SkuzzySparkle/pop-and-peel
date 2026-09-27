@@ -57,6 +57,15 @@
   .header-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
   .header-actions .darkbtn{padding:8px 12px;}
   .header-actions .danger{color:var(--pink-deep);}
+  .head-menu{position:relative;}
+  .head-menu>summary{list-style:none;}
+  .head-menu>summary::-webkit-details-marker{display:none;}
+  .head-menu>summary.darkbtn{display:flex;user-select:none;}
+  .head-menu[open]>summary{border-color:var(--pink);background:var(--lilac);}
+  .head-popover{position:absolute;z-index:80;right:0;top:calc(100% + 9px);width:min(340px,calc(100vw - 30px));
+    padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:0 16px 40px rgba(36,19,49,.22);}
+  .head-popover .menu-section+.menu-section{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;}
+  .head-popover .glabel{margin-bottom:10px;}
   .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
 
   .grid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;}
@@ -150,15 +159,8 @@
   .btn.secondary{background:var(--lilac);color:var(--grape);box-shadow:none;font-size:14px;padding:10px;}
   .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none;}
 
-  /* target 3x3 grid */
-  .target{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:150px;}
-  .target button{aspect-ratio:1;border:1.5px solid var(--line);background:var(--input);border-radius:9px;
-    cursor:pointer;position:relative;transition:.12s;}
-  .target button::after{content:"";position:absolute;width:9px;height:9px;border-radius:50%;
-    top:50%;left:50%;transform:translate(-50%,-50%);background:var(--switch-off);transition:.12s;}
-  .target button:hover{border-color:var(--pink);}
-  .target button.on{border-color:var(--pink);background:linear-gradient(135deg,rgba(255,111,181,.16),rgba(138,92,246,.16));}
-  .target button.on::after{background:linear-gradient(135deg,var(--pink),var(--grape));width:12px;height:12px;}
+  .contour-tools{grid-template-columns:1.25fr 1fr;}
+  @media (max-width:1080px){.contour-tools{grid-template-columns:1fr;}}
 
   /* stage */
   .stage-wrap{padding:16px;}
@@ -245,6 +247,36 @@
     <span class="tagline" id="tagline">add outlines &amp; text to stickers with ease</span>
     <span class="spacer"></span>
     <div class="header-actions">
+      <details class="head-menu contour-only" id="contourSaveMenu">
+        <summary class="darkbtn"><i data-lucide="save"></i><span>Save</span><span aria-hidden="true">▾</span></summary>
+        <div class="head-popover">
+          <div class="menu-section">
+            <p class="glabel"><i data-lucide="save"></i>Output</p>
+            <div class="field"><label class="toggle"><input type="checkbox" id="flip"><span class="switch"></span><span class="t-label">Flip horizontally (mirror)</span></label></div>
+            <div class="two">
+              <button class="btn" id="download" disabled>Save PNG ✦</button>
+              <button class="btn secondary" id="downloadAll" disabled>Save all</button>
+            </div>
+            <button class="btn secondary" id="toText" disabled style="margin-top:8px">Open in Text →</button>
+          </div>
+          <div class="menu-section">
+            <p class="glabel"><i data-lucide="bookmark"></i>Templates</p>
+            <div class="field two">
+              <input type="text" id="tplName" placeholder="Template name" spellcheck="false">
+              <button class="btn secondary" id="tplSave">Save template</button>
+            </div>
+            <div class="field two">
+              <select id="tplList"><option value="">— saved looks —</option></select>
+              <button class="btn secondary" id="tplDelete">Delete</button>
+            </div>
+            <div class="field" style="display:flex;gap:16px;margin-top:4px">
+              <a class="reset" id="tplExport">copy settings code</a>
+              <a class="reset" id="tplImport">paste settings code</a>
+            </div>
+            <p class="hint" id="tplHint">Saves your contour, colors, text style &amp; placement. Stored in this browser.</p>
+          </div>
+        </div>
+      </details>
       <button class="darkbtn" id="reset" type="button"><i data-lucide="rotate-ccw"></i><span>Reset</span></button>
       <button class="darkbtn danger" id="clearAll" type="button"><i data-lucide="x"></i><span>Clear all</span></button>
       <button class="darkbtn" id="darkToggle" type="button"><span id="darkIcon"><i data-lucide="moon"></i></span><span id="darkLabel">Dark</span></button>
@@ -304,44 +336,6 @@
           <p class="hint">Border thickness around cut-out holes — set independently of the outer outline, so thick edges won't close the hole.</p>
         </div>
       </div>
-      <div class="group">
-        <p class="glabel"><i data-lucide="type"></i>Rail text</p>
-        <div class="field"><label>Copyright / caption</label><input type="text" id="text" value="© YOUR NAME HERE" placeholder="© Your name · 2026"></div>
-        <div class="field"><label>Font</label>
-          <select id="font">
-            <option value="Fredoka">Fredoka (rounded)</option>
-            <option value="Nunito">Nunito (clean)</option>
-            <option value="Arial">Arial (system)</option>
-            <option value="Georgia">Georgia (serif)</option>
-            <option value="__custom__">Custom / installed font…</option>
-          </select>
-          <input type="text" id="fontCustom" placeholder="Exact font name, e.g. Comic Sans MS" spellcheck="false" style="display:none;margin-top:8px">
-          <div class="two" style="margin-top:8px">
-            <button class="btn secondary" id="fontSystem" style="font-size:12px;padding:8px">List installed…</button>
-            <button class="btn secondary" id="fontUpload" style="font-size:12px;padding:8px">Upload font file</button>
-          </div>
-          <p class="hint" id="fontHint">Pick “Custom”, then type any font installed on your computer — or list installed fonts (Chrome/Edge) / upload a .ttf/.otf.</p>
-        </div>
-        <div class="field row"><label style="margin:0">Size</label><input type="range" id="fontSize" min="8" max="60" value="18" style="flex:1"><input type="number" class="numval" id="fontSizeNum" min="8" max="60" step="1" value="18"></div>
-        <div class="field row"><label style="margin:0">Letter gap</label><input type="range" id="letterSpace" min="0" max="20" value="2" style="flex:1"><input type="number" class="numval" id="letterSpaceNum" min="0" max="20" step="1" value="2"></div>
-        <div class="field row"><label style="margin:0">Move inward</label><input type="range" id="inset" min="0" max="200" value="6" style="flex:1"><input type="number" class="numval" id="insetNum" min="0" max="200" step="1" value="6"></div>
-        <p class="hint">Raise this to pull the caption farther onto the artwork. “Text on outer side” moves it away from the art instead.</p>
-        <div class="field row"><label style="margin:0">Text color</label><span class="spacer"></span><input type="text" class="hex" id="textColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="textColor" value="#3a2140"></div>
-        <div class="field"><label class="toggle"><input type="checkbox" id="repeat"><span class="switch"></span><span class="t-label">Repeat around whole rail</span></label></div>
-        <div class="field"><label class="toggle"><input type="checkbox" id="flipText"><span class="switch"></span><span class="t-label">Text on outer side</span></label></div>
-        <div class="field"><label class="toggle"><input type="checkbox" id="flipDir"><span class="switch"></span><span class="t-label">Reverse reading direction</span></label></div>
-      </div>
-      <div class="group">
-        <p class="glabel"><i data-lucide="plus"></i>Welded add-on</p>
-        <div class="field"><label>Text to weld</label><input type="text" id="weldText" value="" placeholder="Add a name, word, or symbol"></div>
-        <div class="two">
-          <button class="btn secondary" id="weldAddText" disabled>＋ Add text</button>
-          <button class="btn secondary" id="weldAddLogo" disabled>Upload logo</button>
-        </div>
-        <div class="field row"><label style="margin:0">Selected size</label><input type="range" id="weldScale" min="25" max="300" value="100" style="flex:1" disabled><input type="number" class="numval" id="weldScaleNum" min="25" max="300" step="1" value="100" disabled></div>
-        <button class="btn secondary" id="weldDelete" disabled>Delete selected add-on</button>
-        <p class="hint" id="weldHint">Add text or a transparent logo, then drag it on the preview. Keep it touching the artwork and the cut contour welds around both.</p>
-      </div>
     </div>
 
     <div class="rightcol">
@@ -376,43 +370,49 @@
     </div>
 
       <div class="panel bottom">
-        <div class="bgrid">
+        <div class="bgrid contour-tools">
           <div class="bcol">
-            <p class="glabel"><i data-lucide="target"></i>Placement</p>
-        <div class="field" style="margin-top:14px">
-          <label>Target area — applies to every sticker</label>
-          <div class="target" id="target">
-            <button data-z="0"></button><button data-z="1"></button><button data-z="2"></button>
-            <button data-z="3"></button><button data-z="4"></button><button data-z="5"></button>
-            <button data-z="6"></button><button data-z="7"></button><button data-z="8" class="on"></button>
-          </div>
-          <p class="hint">Pick where the text sits on all stickers. Or <b>drag the text on the preview</b> to fine-tune just the current one.</p>
-        </div>
+            <p class="glabel"><i data-lucide="type"></i>Rail text</p>
+            <div class="field"><label>Placement</label><select id="targetSelect">
+              <option value="0">Top left</option><option value="1">Top center</option><option value="2">Top right</option>
+              <option value="3">Middle left</option><option value="4">Center</option><option value="5">Middle right</option>
+              <option value="6">Bottom left</option><option value="7">Bottom center</option><option value="8" selected>Bottom right</option>
+            </select></div>
+            <div class="field"><label>Copyright / caption</label><input type="text" id="text" value="© YOUR NAME HERE" placeholder="© Your name · 2026"></div>
+            <div class="field"><label>Font</label>
+              <select id="font">
+                <option value="Fredoka">Fredoka (rounded)</option><option value="Nunito">Nunito (clean)</option>
+                <option value="Arial">Arial (system)</option><option value="Georgia">Georgia (serif)</option>
+                <option value="__custom__">Custom / installed font…</option>
+              </select>
+              <input type="text" id="fontCustom" placeholder="Exact font name, e.g. Comic Sans MS" spellcheck="false" style="display:none;margin-top:8px">
+              <div class="two" style="margin-top:8px">
+                <button class="btn secondary" id="fontSystem">List installed…</button>
+                <button class="btn secondary" id="fontUpload">Upload font file</button>
+              </div>
+              <p class="hint" id="fontHint">Choose an installed font or upload a .ttf/.otf file.</p>
+            </div>
+            <div class="field row"><label style="margin:0">Size</label><input type="range" id="fontSize" min="8" max="60" value="18" style="flex:1"><input type="number" class="numval" id="fontSizeNum" min="8" max="60" step="1" value="18"></div>
+            <div class="field row"><label style="margin:0">Letter gap</label><input type="range" id="letterSpace" min="0" max="20" value="2" style="flex:1"><input type="number" class="numval" id="letterSpaceNum" min="0" max="20" step="1" value="2"></div>
+            <div class="field row"><label style="margin:0">Move inward</label><input type="range" id="inset" min="0" max="200" value="6" style="flex:1"><input type="number" class="numval" id="insetNum" min="0" max="200" step="1" value="6"></div>
+            <div class="field row"><label style="margin:0">Text color</label><span class="spacer"></span><input type="text" class="hex" id="textColorHex" value="#3A2140" spellcheck="false"><input type="color" class="color" id="textColor" value="#3a2140"></div>
+            <div class="field"><label class="toggle"><input type="checkbox" id="repeat"><span class="switch"></span><span class="t-label">Repeat around whole rail</span></label></div>
+            <div class="two">
+              <div class="field"><label class="toggle"><input type="checkbox" id="flipText"><span class="switch"></span><span class="t-label">Outer side</span></label></div>
+              <div class="field"><label class="toggle"><input type="checkbox" id="flipDir"><span class="switch"></span><span class="t-label">Reverse</span></label></div>
+            </div>
+            <p class="hint">Choose a starting area or drag the text directly on the preview.</p>
           </div>
           <div class="bcol">
-            <p class="glabel"><i data-lucide="save"></i>Output</p>
-        <div class="field"><label class="toggle"><input type="checkbox" id="flip"><span class="switch"></span><span class="t-label">Flip horizontally (mirror)</span></label></div>
-        <div class="two">
-          <button class="btn" id="download" disabled>Save PNG ✦</button>
-          <button class="btn secondary" id="downloadAll" disabled style="font-size:14px;padding:13px">Save all</button>
-        </div>
-        <button class="btn secondary" id="toText" disabled style="width:100%;margin-top:8px">Add text →</button>
-          </div>
-          <div class="bcol">
-            <p class="glabel"><i data-lucide="bookmark"></i>Templates</p>
-        <div class="field two">
-          <input type="text" id="tplName" placeholder="Template name" spellcheck="false">
-          <button class="btn secondary" id="tplSave" style="font-size:14px;padding:9px">Save</button>
-        </div>
-        <div class="field two">
-          <select id="tplList"><option value="">— saved looks —</option></select>
-          <button class="btn secondary" id="tplDelete" style="font-size:14px;padding:9px">Delete</button>
-        </div>
-        <div class="field" style="display:flex;gap:16px;margin-top:4px">
-          <a class="reset" id="tplExport">copy settings code</a>
-          <a class="reset" id="tplImport">paste settings code</a>
-        </div>
-        <p class="hint" id="tplHint">Saves your contour, colors, text style &amp; target zone. Stored in this browser.</p>
+            <p class="glabel"><i data-lucide="plus"></i>Welded add-on</p>
+            <div class="field"><label>Text to weld</label><input type="text" id="weldText" value="" placeholder="Add a name, word, or symbol"></div>
+            <div class="two">
+              <button class="btn secondary" id="weldAddText" disabled>＋ Add text</button>
+              <button class="btn secondary" id="weldAddLogo" disabled>Upload logo</button>
+            </div>
+            <div class="field row" style="margin-top:10px"><label style="margin:0">Selected size</label><input type="range" id="weldScale" min="25" max="300" value="100" style="flex:1" disabled><input type="number" class="numval" id="weldScaleNum" min="25" max="300" step="1" value="100" disabled></div>
+            <button class="btn secondary" id="weldDelete" disabled>Delete selected add-on</button>
+            <p class="hint" id="weldHint">Add text or a transparent logo, then drag it on the preview. Keep it touching the artwork so the contour welds around both.</p>
           </div>
         </div>
       </div>
@@ -1401,14 +1401,12 @@ $('fillSeg').addEventListener('click',e=>{
 });
 
 // target zone
-$('target').addEventListener('click',e=>{
-  const b=e.target.closest('button[data-z]'); if(!b) return;
-  curZone=+b.dataset.z;
-  [...$('target').children].forEach(c=>c.classList.toggle('on', c===b));
+$('targetSelect').addEventListener('change',()=>{
+  curZone=+$('targetSelect').value;
   images.forEach(im=>im.pos=null);
   scheduleRender(); pushHistory();
 });
-function setZone(z){ curZone=z; [...$('target').children].forEach(c=>c.classList.toggle('on', +c.dataset.z===z)); }
+function setZone(z){ curZone=+z; $('targetSelect').value=String(curZone); }
 
 $('download').addEventListener('click',()=>{ if(active>=0) saveOne(images[active]); });
 $('downloadAll').addEventListener('click',saveAll);
@@ -1513,6 +1511,7 @@ function activatePage(pg){
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.page===pg));
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   $('page-'+pg).classList.add('active');
+  document.querySelectorAll('.contour-only').forEach(x=>{x.hidden=pg!=='contour';if(pg!=='contour'&&x.tagName==='DETAILS')x.open=false;});
   $('tagline').textContent = pg==='vibrancy' ? 'bulk-grade & test your print colors~' : pg==='text' ? 'add curved, colored text with your own fonts~' : 'add outlines & text to stickers with ease';
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{

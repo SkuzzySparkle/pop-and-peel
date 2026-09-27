@@ -157,9 +157,11 @@
   .btn:active{transform:translateY(0);}
   .btn.tool-active{background:linear-gradient(135deg,var(--pink),var(--grape));border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(138,92,246,.22);}
   .btn.secondary{background:var(--lilac);color:var(--grape);box-shadow:none;font-size:14px;padding:10px;}
+  .btn svg{width:16px;height:16px;display:inline-block;vertical-align:-3px;stroke-width:2.4;}
   .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none;}
 
   .contour-tools{grid-template-columns:1.25fr 1fr;}
+  .single-tool{grid-template-columns:1fr;}
   @media (max-width:1080px){.contour-tools{grid-template-columns:1fr;}}
 
   /* stage */
@@ -247,7 +249,7 @@
     <span class="tagline" id="tagline">add outlines &amp; text to stickers with ease</span>
     <span class="spacer"></span>
     <div class="header-actions">
-      <details class="head-menu contour-only" id="contourSaveMenu">
+      <details class="head-menu page-menu" data-page-menu="contour" id="contourSaveMenu">
         <summary class="darkbtn"><i data-lucide="save"></i><span>Save</span><span aria-hidden="true">▾</span></summary>
         <div class="head-popover">
           <div class="menu-section">
@@ -274,6 +276,44 @@
               <a class="reset" id="tplImport">paste settings code</a>
             </div>
             <p class="hint" id="tplHint">Saves your contour, colors, text style &amp; placement. Stored in this browser.</p>
+          </div>
+        </div>
+      </details>
+      <details class="head-menu page-menu" data-page-menu="vibrancy" id="vibrancySaveMenu" hidden>
+        <summary class="darkbtn"><i data-lucide="save"></i><span>Save</span><span aria-hidden="true">▾</span></summary>
+        <div class="head-popover">
+          <div class="menu-section">
+            <p class="glabel"><i data-lucide="save"></i>Output</p>
+            <div class="two">
+              <button class="btn" id="vDownload" disabled>Save PNG ✦</button>
+              <button class="btn secondary" id="vDownloadAll" disabled>Save all</button>
+            </div>
+            <button class="btn secondary" id="vToContour" disabled style="margin-top:8px">Use all in Contour →</button>
+            <button class="btn secondary" id="vPrint" disabled style="margin-top:8px"><i data-lucide="printer"></i> Print test sheet</button>
+            <button class="btn secondary" id="vApplyAll" disabled style="margin-top:8px">Apply grade to all</button>
+          </div>
+          <div class="menu-section">
+            <p class="glabel"><i data-lucide="heart"></i>My grades</p>
+            <div class="field two">
+              <input type="text" id="vTplName" placeholder="Name this look" spellcheck="false">
+              <button class="btn secondary" id="vTplSave">Save grade</button>
+            </div>
+            <div class="field two">
+              <select id="vTplList"><option value="">— saved grades —</option></select>
+              <button class="btn secondary" id="vTplDelete">Delete</button>
+            </div>
+            <p class="hint">Saved grades stay in this browser and can be reused on any image.</p>
+          </div>
+        </div>
+      </details>
+      <details class="head-menu page-menu" data-page-menu="text" id="textSaveMenu" hidden>
+        <summary class="darkbtn"><i data-lucide="save"></i><span>Save</span><span aria-hidden="true">▾</span></summary>
+        <div class="head-popover">
+          <div class="menu-section">
+            <p class="glabel"><i data-lucide="save"></i>Output</p>
+            <button class="btn" id="tDownload" disabled>Save PNG</button>
+            <button class="btn secondary" id="tToContour" disabled style="margin-top:8px">Use in Contour →</button>
+            <p class="hint">The saved PNG includes every text layer and any added canvas space.</p>
           </div>
         </div>
       </details>
@@ -532,15 +572,7 @@
         </div>
 
         <div class="panel bottom">
-          <div class="bgrid">
-            <div class="bcol">
-              <p class="glabel"><i data-lucide="save"></i>Export</p>
-              <button class="btn" id="vDownload" disabled>Save PNG ✦</button>
-              <button class="btn secondary" id="vDownloadAll" disabled style="margin-top:8px;width:100%">Save all</button>
-              <button class="btn secondary" id="vToContour" disabled style="margin-top:8px;width:100%">Use all in Contour →</button>
-              <button class="btn secondary" id="vPrint" disabled style="margin-top:8px;width:100%"><i data-lucide="printer"></i> Print test sheet</button>
-              <button class="btn secondary" id="vApplyAll" disabled style="margin-top:8px;width:100%">Apply grade to all</button>
-            </div>
+          <div class="bgrid single-tool">
           <div class="bcol">
           <p class="glabel"><i data-lucide="crop"></i>Crop</p>
           <div class="field"><label>Shape</label>
@@ -566,18 +598,6 @@
           <button class="btn secondary" id="vCropAll" disabled style="width:100%">Apply crop to all</button>
           <p class="hint" id="vCropHint">Drag a box on the image, then Done. Corners resize; drag inside to move.</p>
           </div>
-            <div class="bcol">
-              <p class="glabel"><i data-lucide="heart"></i>My grades</p>
-              <div class="field two">
-                <input type="text" id="vTplName" placeholder="Name this look" spellcheck="false">
-                <button class="btn secondary" id="vTplSave">Save</button>
-              </div>
-              <div class="field two">
-                <select id="vTplList"><option value="">— saved grades —</option></select>
-                <button class="btn secondary" id="vTplDelete">Delete</button>
-              </div>
-              <p class="hint">Save a grade you like and reuse it on any photo. Stored in this browser.</p>
-            </div>
           </div>
         </div>
       </div>
@@ -687,12 +707,7 @@
           </div>
         </div>
         <div class="panel bottom">
-          <div class="bgrid">
-            <div class="bcol">
-              <p class="glabel"><i data-lucide="save"></i>Output</p>
-              <button class="btn" id="tDownload" disabled>Save PNG</button>
-              <button class="btn secondary" id="tToContour" disabled style="margin-top:8px;width:100%">Use in Contour →</button>
-            </div>
+          <div class="bgrid single-tool">
             <div class="bcol">
               <p class="glabel"><i data-lucide="type"></i>Tips</p>
               <p class="hint">Curve arches text like a rainbow (+ up, − down). Outline helps it read on busy art. Add multiple layers for stacked words.</p>
@@ -1511,7 +1526,7 @@ function activatePage(pg){
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.page===pg));
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   $('page-'+pg).classList.add('active');
-  document.querySelectorAll('.contour-only').forEach(x=>{x.hidden=pg!=='contour';if(pg!=='contour'&&x.tagName==='DETAILS')x.open=false;});
+  document.querySelectorAll('.page-menu').forEach(x=>{const show=x.dataset.pageMenu===pg;x.hidden=!show;if(!show)x.open=false;});
   $('tagline').textContent = pg==='vibrancy' ? 'bulk-grade & test your print colors~' : pg==='text' ? 'add curved, colored text with your own fonts~' : 'add outlines & text to stickers with ease';
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
